@@ -1,0 +1,13 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Local research corpus / copyrighted
+tmp/**
+!tmp/.gitkeep
+!tmp/README.md
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp

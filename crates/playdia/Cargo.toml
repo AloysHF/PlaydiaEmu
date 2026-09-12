@@ -1,0 +1,17 @@
+[package]
+name = "playdia"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Playdia standalone frontend"
+
+[[bin]]
+name = "playdia"
+path = "src/main.rs"
+
+[dependencies]
+playdia-core = { path = "../playdia-core" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }

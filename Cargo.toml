@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/playdia-core",
+    "crates/playdia",
+    "crates/playdia-tools",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://example.invalid/playdiaemu"
+authors = ["PlaydiaEmu contributors"]
+
+[workspace.dependencies]
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive"] }
+crc32fast = "1"
+log = "0.4"
+env_logger = "0.11"

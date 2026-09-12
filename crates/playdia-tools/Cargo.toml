@@ -1,0 +1,15 @@
+[package]
+name = "playdia-tools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Playdia research tools (ISO/XA inspect, fixtures)"
+
+[[bin]]
+name = "playdia-inspect"
+path = "src/bin/playdia_inspect.rs"
+
+[dependencies]
+playdia-core = { path = "../playdia-core" }
+anyhow = { workspace = true }
+clap = { workspace = true }

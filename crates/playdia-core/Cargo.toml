@@ -1,0 +1,13 @@
+[package]
+name = "playdia-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Headless deterministic Playdia core"
+
+[dependencies]
+thiserror = { workspace = true }
+crc32fast = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
