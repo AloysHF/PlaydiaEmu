@@ -8,7 +8,10 @@ use playdia_core::video::{rgb555_to_rgb888, CodecParams, VideoDecoder};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "playdia-scan", about = "Sweep video codec params vs a reference frame")]
+#[command(
+    name = "playdia-scan",
+    about = "Sweep video codec params vs a reference frame"
+)]
 struct Cli {
     disc: PathBuf,
     reference: PathBuf,
@@ -73,11 +76,7 @@ fn load_ppm_gray(data: &[u8]) -> Result<(Vec<f32>, usize, usize)> {
             *g = pix[k] as f32;
         }
     } else {
-        for (k, g) in gray
-            .iter_mut()
-            .enumerate()
-            .take((w * h).min(pix.len() / 3))
-        {
+        for (k, g) in gray.iter_mut().enumerate().take((w * h).min(pix.len() / 3)) {
             let o = k * 3;
             *g = 0.299 * pix[o] as f32 + 0.587 * pix[o + 1] as f32 + 0.114 * pix[o + 2] as f32;
         }

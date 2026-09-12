@@ -3,7 +3,8 @@
 use playdia_core::video::{decode_packet_frames, CodecParams};
 
 fn sample_packet() -> Vec<u8> {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp/out/pkt0_s150_e156.bin");
+    let p =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tmp/out/pkt0_s150_e156.bin");
     if p.exists() {
         return std::fs::read(&p).expect("read sample packet");
     }

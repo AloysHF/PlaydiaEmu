@@ -1,7 +1,8 @@
 //! HLE player tests against synthetic MODE2 discs (no copyrighted content).
 
+use playdia_core::content::{DiscImage, Track};
 use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::DiscKind;
+use playdia_core::{DiscKind, InputButtons};
 
 fn synthetic_stream_disc() -> Vec<u8> {
     // 8 raw sectors: lead-in file0 + 6×F1 + F2
@@ -62,4 +63,76 @@ fn player_crc_changes_or_stable_not_panics() {
     let _ = p.run_frame();
     let _ = p.frame_crc();
     let _ = p.stats_line();
+}
+
+fn interactive_disc(command: u8) -> DiscImage {
+    const SECTOR: usize = 2352;
+    let mut stream = vec![0u8; SECTOR * 220];
+    for sector in stream.as_chunks_mut::<SECTOR>().0 {
+        sector[15] = 2;
+        sector[16] = 1;
+        sector[18] = 0x08;
+    }
+    let cmd = &mut stream[SECTOR..SECTOR * 2];
+    cmd[18] = 0x09;
+    cmd[24] = 0xF2;
+    cmd[25] = command;
+    for button in 0..7 {
+        let off = 27 + button * 4;
+        cmd[off + 1] = 4;
+        cmd[off + 2] = if button == 5 { 30 } else { 20 };
+    }
+    DiscImage {
+        cue_path: None,
+        tracks: vec![
+            Track {
+                number: 1,
+                path: Default::default(),
+                data: vec![0; SECTOR * 10],
+                sectors: 10,
+                mode2: true,
+            },
+            Track {
+                number: 2,
+                path: Default::default(),
+                data: stream,
+                sectors: 220,
+                mode2: true,
+            },
+        ],
+        single: None,
+        total_sectors: 230,
+        crc: 0,
+        kind: DiscKind::CueMultiTrack,
+    }
+}
+
+#[test]
+fn interactive_jump_uses_disc_lba_and_discards_prefetch() {
+    let mut player = DiscPlayer::new();
+    player.disc = Some(interactive_disc(0x40));
+    assert_eq!(player.run_frame(), PlayerStop::Ok);
+    assert_eq!(player.interactive[0].0, 11);
+    assert_eq!(player.demux.interactive_cmds, 1);
+    assert_eq!(player.track_index, 160);
+    assert_eq!(player.run_frame(), PlayerStop::Ok);
+    assert_eq!(player.track_index, 168);
+}
+
+#[test]
+fn interactive_choice_pauses_and_seeks_on_button_edge() {
+    let mut player = DiscPlayer::new();
+    player.disc = Some(interactive_disc(0x44));
+    player.run_frame();
+    assert!(player.is_waiting_for_input());
+    assert_eq!(player.track_index, 2);
+    player.run_frame();
+    assert_eq!(player.track_index, 2);
+    player.set_input(InputButtons {
+        a: true,
+        ..Default::default()
+    });
+    player.run_frame();
+    assert!(!player.is_waiting_for_input());
+    assert_eq!(player.track_index, 178);
 }

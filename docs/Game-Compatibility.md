@@ -14,8 +14,8 @@ discs, BIOS images, or PPM dumps.
 
 | Title | Load CUE | Stream track | Video frames | Audio PCM | Notes |
 |-------|----------|--------------|--------------|-----------|-------|
-| Mari-nee no Heya | ✅ | ✅ (Track 2) | ✅ (96 host / 96 decoded) | ✅ (~846k samples) | DC-only image |
-| Playdia Sample Soft | ✅ | ✅ | ✅ | ✅ | DC-only image |
+| Mari-nee no Heya | ✅ | ✅ (Track 2) | ✅ (96 host / 96 decoded) | ✅ (~846k samples) | Approximate image |
+| Playdia Sample Soft | ✅ | ✅ | ✅ | ✅ | Approximate image |
 | Other Redump titles | ⬜ | Expected same | ⬜ | ⬜ | Expected same CUE layout |
 
 Legend: ✅ verified · ⬜ not yet verified
@@ -45,7 +45,9 @@ Record:
 
 ## Notes
 
-- Default video path is **DC-only reconstruction**; frames are structured but
-  not pixel-accurate until the AK8000 VLC is locked.
+- Default video path uses **fixed-count raw AC reconstruction**; frames are structured but
+  do not reproduce the original picture until the AK8000 VLC is locked.
+- F2 jump and button-choice navigation is exercised on a private disc; timeout,
+  quiz, and score semantics have not been verified on hardware.
 - Prefer `--release` builds for any visual check.
 - Do not commit discs, BIOS, or PPM dumps.

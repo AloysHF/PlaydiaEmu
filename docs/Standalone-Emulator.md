@@ -63,7 +63,18 @@ cargo run --release -p playdia -- play path\to\game.cue --frames 180 --dump-ppm 
 | `--dump-ppm PATH` | — | Write final 320×240 PPM |
 | `--dump-every N` | — | Periodic PPM dumps every N frames |
 | `--dump-dir DIR` | `tmp/out` | Directory for periodic dumps |
-| `--full-decode` | off | Experimental AC path (default is DC-only reconstruction) |
+| `--full-decode` | off | Experimental AC quantization scaling (default uses raw coefficients) |
+| `--press-at FRAME:BUTTON` | — | Inject a one-frame press; repeat for multiple inputs. Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start` |
+
+The HLE player follows F2 scene jumps and pauses at F2 button choices until a
+mapped button is pressed. CUE/BIN images provide the full-disc addresses needed
+for these jumps. Timeout, score, and quiz behavior is still incomplete.
+The current video decoder renders approximate blocks; it cannot reproduce the
+original game picture until the AK8000 entropy format is recovered.
+
+Example: `playdia play game.cue --frames 180 --press-at 122:a --dump-ppm scene.ppm`.
+Frame numbers start at zero. Use a frame after a choice prompt appears; the
+`waiting=true` field in the progress output marks that state.
 
 Example (private research corpus — do not commit discs):
 
@@ -86,7 +97,7 @@ cargo run --release -p playdia --bin playdia-emu -- path\to\game.cue
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
 | `--scale N` | `3` | Window scale factor (native 320×240, clamp 1–8) |
 | `--fps N` | `30` | Target FPS |
-| `--full-decode` | off | Experimental AC decode |
+| `--full-decode` | off | Experimental AC quantization scaling |
 | `--mute` | off | Mute host audio |
 | `--frames N` | `0` | Quit after N host frames (`0` = until window closed) |
 | `--dump-ppm PATH` | — | Save PPM when quitting via `--frames` |

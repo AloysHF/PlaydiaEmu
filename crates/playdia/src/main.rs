@@ -33,9 +33,12 @@ enum Cmd {
         /// Dump directory for periodic frames (with --dump-every).
         #[arg(long, default_value = "tmp/out")]
         dump_dir: PathBuf,
-        /// Use AC decode (experimental). Default is DC-only reconstruction.
+        /// Apply experimental quantization to the approximate AC coefficients.
         #[arg(long)]
         full_decode: bool,
+        /// Press a button at a host frame, e.g. --press-at 120:a.
+        #[arg(long = "press-at", value_parser = parse_press_at)]
+        press_at: Vec<(u32, InputButtons)>,
     },
     /// LLE-oriented headless (SH-1 + bus). Prefer `play` for disc playback.
     Headless {
@@ -123,11 +126,11 @@ fn main() -> Result<()> {
             dump_every,
             dump_dir,
             full_decode,
+            press_at,
         } => {
             let mut p = DiscPlayer::new();
             if full_decode {
                 p.video.params.ac_dequant = 1;
-                p.video.params.use_eob = false;
             }
             p.load_path(&disc).context("load disc")?;
             if let Some(dir) = dump_every.map(|_| dump_dir.clone()) {
@@ -135,10 +138,18 @@ fn main() -> Result<()> {
             }
             let mut dumped = 0u32;
             for i in 0..frames {
+                let mut held = InputButtons::default();
+                for &(at, buttons) in &press_at {
+                    if at == i {
+                        held = buttons;
+                    }
+                }
+                p.set_input(held);
+                let previous_frames = p.video.frames_decoded;
                 let stop = p.run_frame();
                 if let Some(n) = dump_every {
                     if n > 0
-                        && p.video.frames_decoded > 0
+                        && p.video.frames_decoded > previous_frames
                         && p.video.frames_decoded.is_multiple_of(n as u64)
                     {
                         let path = dump_dir.join(format!("frame_{:05}.ppm", dumped));
@@ -241,4 +252,25 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn parse_press_at(value: &str) -> Result<(u32, InputButtons), String> {
+    let (frame, name) = value
+        .split_once(':')
+        .ok_or_else(|| "expected FRAME:BUTTON".to_owned())?;
+    let frame = frame
+        .parse::<u32>()
+        .map_err(|_| "frame must be a non-negative integer".to_owned())?;
+    let mut buttons = InputButtons::default();
+    match name.to_ascii_lowercase().as_str() {
+        "up" => buttons.up = true,
+        "down" => buttons.down = true,
+        "left" => buttons.left = true,
+        "right" => buttons.right = true,
+        "a" => buttons.a = true,
+        "b" => buttons.b = true,
+        "start" => buttons.start = true,
+        _ => return Err("button must be up, down, left, right, a, b, or start".to_owned()),
+    }
+    Ok((frame, buttons))
 }

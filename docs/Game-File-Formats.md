@@ -49,14 +49,22 @@ Payload[0]:
 - `0xF2` — end of frame (decode if acc starts `00 80 04`) or interactive cmd
 - `0xF3` — reset accumulator
 
+Interactive F2 sectors (`submode` bit 0 set) contain a command byte followed by
+seven four-byte button destinations. Each destination stores binary minute,
+second, frame, and an extra byte; the absolute disc LBA is
+`minute × 4500 + second × 75 + frame − 150`. The HLE player follows known
+scene jumps and button choices within the stream track. Other command effects
+remain under investigation.
+
 A complete frame packet typically starts with `00 80 04` (quant scale +
 qtables), then F1 fragments, then F2 end.
 
 ## Video path (approximate)
 
 The decoder is a proprietary MPEG-1-like DCT path targeting 320×240 RGB555.
-The current default is DC-only reconstruction; `--full-decode` enables the
-experimental AC path. Pixel-accurate AK8000 VLC is still unsolved — treat
+The current default reads a fixed number of raw AC coefficients per block;
+`--full-decode` applies experimental quantization scaling. Pixel-accurate
+AK8000 VLC is still unsolved — treat
 frames as approximate unless fixture-proven against real hardware references.
 
 ## Memory map (LLE / hardware access dump)

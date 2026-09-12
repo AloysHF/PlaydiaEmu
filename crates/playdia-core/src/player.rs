@@ -35,6 +35,7 @@ pub struct DiscPlayer {
     pub track_index: u32,
     pub interactive: Vec<(u32, Vec<u8>)>,
     pub pcm: Vec<i16>,
+    waiting: Option<[Option<u32>; 7]>,
 }
 
 impl Default for DiscPlayer {
@@ -57,6 +58,7 @@ impl DiscPlayer {
             track_index: 0,
             interactive: Vec::new(),
             pcm: Vec::new(),
+            waiting: None,
         }
     }
 
@@ -90,6 +92,7 @@ impl DiscPlayer {
         self.track_index = 0;
         self.interactive.clear();
         self.pcm.clear();
+        self.waiting = None;
     }
 
     pub fn set_input(&mut self, held: InputButtons) {
@@ -97,17 +100,37 @@ impl DiscPlayer {
     }
 
     pub fn run_frame(&mut self) -> PlayerStop {
+        if let Some(destinations) = self.waiting {
+            if let Some(button) = pressed_choice(self.input.pressed) {
+                if let Some(target) = destinations[button] {
+                    if self.seek_lba(target) {
+                        self.waiting = None;
+                    }
+                }
+            }
+            if self.waiting.is_some() {
+                self.input.clear_edges();
+                self.frame += 1;
+                return PlayerStop::Ok;
+            }
+        }
         // Collect raw sectors first to avoid borrow conflicts.
-        let mut batch: Vec<Vec<u8>> = Vec::new();
+        let mut batch: Vec<(u32, Vec<u8>)> = Vec::new();
         let mut single_mode = false;
         {
             let Some(disc) = self.disc.as_ref() else {
                 return PlayerStop::NoStream;
             };
             if disc.kind == crate::content::DiscKind::CueMultiTrack {
-                let Some(track) = disc.stream_track().cloned() else {
+                let Some(track) = disc.stream_track() else {
                     return PlayerStop::NoStream;
                 };
+                let track_base = disc
+                    .tracks
+                    .iter()
+                    .take_while(|t| t.number != track.number)
+                    .map(|t| t.sectors)
+                    .sum::<u32>();
                 // Skip lead-in / TOC (file_id 0) until stream content (file_id 1) starts.
                 if self.track_index == 0 {
                     for i in 0..track.sectors {
@@ -130,7 +153,7 @@ impl DiscPlayer {
                         break;
                     };
                     self.track_index += 1;
-                    batch.push(raw.to_vec());
+                    batch.push((track_base + self.track_index - 1, raw.to_vec()));
                 }
             } else {
                 single_mode = true;
@@ -158,17 +181,16 @@ impl DiscPlayer {
                     } else {
                         item.push(0u8);
                     }
-                    batch.push(item);
+                    batch.push((lba, item));
                 }
             }
         }
 
-        for item in batch {
+        for (lba, item) in batch {
             if single_mode {
                 if item.len() < 5 || item[4] == 0 {
                     continue;
                 }
-                let lba = u32::from_le_bytes(item[0..4].try_into().unwrap());
                 let data_end = item.len() - 6;
                 let data = item[5..data_end].to_vec();
                 let meta = &item[data_end..];
@@ -183,9 +205,13 @@ impl DiscPlayer {
                     data,
                     lba,
                 };
-                self.handle_sector(sec);
+                if self.handle_sector(sec) {
+                    break;
+                }
             } else {
-                self.handle_raw_sector(&item);
+                if self.handle_raw_sector(&item, lba) {
+                    break;
+                }
             }
         }
 
@@ -201,7 +227,7 @@ impl DiscPlayer {
         }
     }
 
-    fn handle_raw_sector(&mut self, raw: &[u8]) {
+    fn handle_raw_sector(&mut self, raw: &[u8], lba: u32) -> bool {
         // Build a Sector from raw MODE2 without allocating path through DiscImage::single.
         let mode = raw.get(15).copied().unwrap_or(0);
         let file_id = raw.get(16).copied().unwrap_or(0);
@@ -229,12 +255,12 @@ impl DiscPlayer {
             submode,
             coding,
             data,
-            lba: self.track_index.saturating_sub(1),
+            lba,
         };
-        self.handle_sector(sec);
+        self.handle_sector(sec)
     }
 
-    fn handle_sector(&mut self, sec: crate::content::Sector) {
+    fn handle_sector(&mut self, sec: crate::content::Sector) -> bool {
         let pkt = self.demux.push(&sec);
         match &pkt {
             XaPacket::Video { data, .. } => {
@@ -259,10 +285,129 @@ impl DiscPlayer {
             }
             XaPacket::Interactive { lba, data } => {
                 self.interactive.push((*lba, data.clone()));
-                self.demux.note_interactive();
+                return self.apply_interactive(*lba, data);
             }
             XaPacket::Other { .. } => {}
         }
+        false
+    }
+
+    fn apply_interactive(&mut self, lba: u32, data: &[u8]) -> bool {
+        if data.len() < 31 || data[0] != 0xF2 {
+            log::warn!("short F2 command at LBA {lba}");
+            return false;
+        }
+        let mut destinations = [None; 7];
+        for (i, dest) in destinations.iter_mut().enumerate() {
+            let off = 3 + i * 4;
+            *dest = msf_to_lba(&data[off..off + 3]).filter(|&target| self.valid_target(target));
+        }
+        match data[1] {
+            0x44 | 0x50 => {
+                if destinations.iter().all(Option::is_none) {
+                    log::warn!("F2 choice without valid destinations at LBA {lba}");
+                    return false;
+                }
+                self.resume_after(lba);
+                self.waiting = Some(destinations);
+                true
+            }
+            0x40 | 0x60 | 0x90 | 0xA0 => {
+                if data[1] == 0xA0 && data[2] == 0xF0 {
+                    return false;
+                }
+                let Some(target) = destinations[0] else {
+                    log::warn!("F2 jump without valid destination at LBA {lba}");
+                    return false;
+                };
+                self.resume_after(lba);
+                if target <= lba && self.input.pressed != InputButtons::default() {
+                    self.video.discard_pending();
+                    return true;
+                }
+                let _ = self.seek_lba(target);
+                true
+            }
+            0x80 => false,
+            kind => {
+                log::warn!("unknown F2 command {kind:#04x} at LBA {lba}");
+                false
+            }
+        }
+    }
+
+    fn resume_after(&mut self, lba: u32) {
+        let Some(disc) = self.disc.as_ref() else {
+            return;
+        };
+        if disc.kind == crate::content::DiscKind::CueMultiTrack {
+            if let Some(track) = disc.stream_track() {
+                let base = disc
+                    .tracks
+                    .iter()
+                    .take_while(|t| t.number != track.number)
+                    .map(|t| t.sectors)
+                    .sum::<u32>();
+                self.track_index = lba.saturating_sub(base) + 1;
+            }
+        } else {
+            self.sector_cursor = lba + 1;
+        }
+    }
+
+    fn seek_lba(&mut self, lba: u32) -> bool {
+        let Some(disc) = self.disc.as_ref() else {
+            return false;
+        };
+        if disc.kind == crate::content::DiscKind::CueMultiTrack {
+            let Some(track) = disc.stream_track() else {
+                return false;
+            };
+            let base = disc
+                .tracks
+                .iter()
+                .take_while(|t| t.number != track.number)
+                .map(|t| t.sectors)
+                .sum::<u32>();
+            if lba < base || lba - base >= track.sectors {
+                log::warn!("F2 destination outside stream track: LBA {lba}");
+                return false;
+            }
+            self.track_index = lba - base;
+        } else {
+            if lba >= disc.total_sectors {
+                log::warn!("F2 destination outside disc: LBA {lba}");
+                return false;
+            }
+            self.sector_cursor = lba;
+        }
+        self.video.discard_pending();
+        self.demux.end_flag = false;
+        true
+    }
+
+    fn valid_target(&self, lba: u32) -> bool {
+        let Some(disc) = self.disc.as_ref() else {
+            return false;
+        };
+        if disc.kind == crate::content::DiscKind::CueMultiTrack {
+            let Some(track) = disc.stream_track() else {
+                return false;
+            };
+            let base = disc
+                .tracks
+                .iter()
+                .take_while(|t| t.number != track.number)
+                .map(|t| t.sectors)
+                .sum::<u32>();
+            lba >= base && lba - base < track.sectors
+        } else {
+            lba < disc.total_sectors
+        }
+    }
+
+    pub fn is_waiting_for_input(&self) -> bool {
+        self.waiting.is_some()
     }
 
     pub fn framebuffer(&self) -> &[u16] {
@@ -279,12 +424,13 @@ impl DiscPlayer {
 
     pub fn stats_line(&self) -> String {
         format!(
-            "frames={} failed={} video_sec={} audio_sec={} interactive={} fb_crc={:08x}",
+            "frames={} failed={} video_sec={} audio_sec={} interactive={} waiting={} fb_crc={:08x}",
             self.video.frames_decoded,
             self.video.frames_failed,
             self.demux.video_sectors,
             self.demux.audio_sectors,
             self.demux.interactive_cmds,
+            self.is_waiting_for_input(),
             self.frame_crc()
         )
     }
@@ -299,5 +445,32 @@ impl DiscPlayer {
 
     pub fn raw_sector_size() -> usize {
         RAW_SECTOR
+    }
+}
+
+fn msf_to_lba(msf: &[u8]) -> Option<u32> {
+    if msf.len() != 3 || msf[1] >= 60 || msf[2] >= 75 {
+        return None;
+    }
+    (u32::from(msf[0]) * 4500 + u32::from(msf[1]) * 75 + u32::from(msf[2])).checked_sub(150)
+}
+
+fn pressed_choice(buttons: InputButtons) -> Option<usize> {
+    if buttons.up {
+        Some(1)
+    } else if buttons.down {
+        Some(2)
+    } else if buttons.left {
+        Some(3)
+    } else if buttons.right {
+        Some(4)
+    } else if buttons.a {
+        Some(5)
+    } else if buttons.b {
+        Some(6)
+    } else if buttons.start {
+        Some(0)
+    } else {
+        None
     }
 }

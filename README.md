@@ -11,6 +11,7 @@ ships an SH-1 LLE shell for future firmware experiments.
 Research-grade but usable for disc playback:
 
 - **HLE disc player (recommended)** — dual-track MODE2 CUE/BIN streaming, F1/F2/F3 video markers, XA ADPCM audio
+- **Interactive stream control** — F2 jumps and button choices seek within the stream track; unsupported command details remain under investigation
 - **Video** — proprietary MPEG-1-like DCT path to 320×240 RGB555 (approximate until AK8000 VLC is locked)
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
@@ -21,9 +22,9 @@ Research-grade but usable for disc playback:
 ## Features
 
 - **CDS-XA Form 2 streaming** — 2352-byte Mode2 sectors, dual-track CUE/BIN
-- **F1/F2/F3 routing** — video fragment assembly, frame end, scene reset
+- **F1/F2/F3 routing** — video fragment assembly, frame end, scene reset, and F2 scene navigation
 - **XA ADPCM audio** — 4-bit ADPCM sound groups, 37800/18900 Hz → stereo 44100
-- **320×240 RGB555 framebuffer** — DC-only reconstruction by default; experimental `--full-decode` AC path
+- **320×240 RGB555 framebuffer** — approximate fixed-count AC reconstruction by default; experimental `--full-decode` coefficient scaling. Neither path reproduces original game pixels yet
 - **Save states** — content identity + CRC envelope
 - **Headless / inspect tooling** — sector and packet diagnostics without a window
 - **RetroArch integration** — libretro core for frontend use
@@ -36,6 +37,9 @@ Research-grade but usable for disc playback:
 ```powershell
 cargo run --release -p playdia -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
 ```
+
+For a reproducible button choice in headless playback, add for example
+`--press-at 120:a` (zero-based host frame; repeat the option for more presses).
 
 Windowed playback:
 
@@ -170,8 +174,8 @@ for load, stream routing, video frames, and audio PCM.
 
 | Title | Status |
 |-------|--------|
-| Mari-nee no Heya | Verified (DC-only image) |
-| Playdia Sample Soft | Verified (DC-only image) |
+| Mari-nee no Heya | Verified (approximate image) |
+| Playdia Sample Soft | Verified (approximate image) |
 | Other Redump titles | Expected same CUE layout; not yet listed |
 
 For the detailed matrix and how to update it, see

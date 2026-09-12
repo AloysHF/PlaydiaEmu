@@ -25,7 +25,7 @@ struct Cli {
     /// Target FPS
     #[arg(long, default_value_t = 30)]
     fps: u32,
-    /// Experimental AC decode instead of DC-only reconstruction
+    /// Apply experimental quantization to the approximate AC coefficients
     #[arg(long)]
     full_decode: bool,
     /// Mute host audio
@@ -58,7 +58,10 @@ fn rgb555_to_u32(fb: &[u16]) -> Vec<u32> {
             let r = (p & 0x1F) as u32;
             let g = ((p >> 5) & 0x1F) as u32;
             let b = ((p >> 10) & 0x1F) as u32;
-            (r << 19) | (g << 11) | (b << 3) | 0x0008_0808
+            let r8 = (r << 3) | (r >> 2);
+            let g8 = (g << 3) | (g >> 2);
+            let b8 = (b << 3) | (b >> 2);
+            (r8 << 16) | (g8 << 8) | b8
         })
         .collect()
 }
@@ -74,11 +77,8 @@ fn main() -> Result<()> {
     let mut player = DiscPlayer::new();
     if cli.full_decode {
         player.video.params.ac_dequant = 1;
-        player.video.params.use_eob = true;
     }
-    player
-        .load_path(&cli.disc)
-        .context("failed to load disc")?;
+    player.load_path(&cli.disc).context("failed to load disc")?;
 
     let scale = cli.scale.clamp(1, 8) as usize;
     let mut window = minifb::Window::new(
@@ -131,10 +131,7 @@ fn main() -> Result<()> {
         if let Some((_handle, player_out)) = audio.as_ref() {
             let pcm = player.drain_audio();
             if !pcm.is_empty() && player_out.len() < 16 {
-                let samples: Vec<f32> = pcm
-                    .iter()
-                    .map(|&s| s as f32 / i16::MAX as f32)
-                    .collect();
+                let samples: Vec<f32> = pcm.iter().map(|&s| s as f32 / i16::MAX as f32).collect();
                 player_out.append(SamplesBuffer::new(
                     NonZero::new(2).unwrap(),
                     NonZero::new(44100).unwrap(),
