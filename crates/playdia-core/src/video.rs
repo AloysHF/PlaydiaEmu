@@ -46,10 +46,10 @@ impl Default for CodecParams {
         Self {
             width: ENC_W,
             height: ENC_H,
-            bs_offset: 44,
+            bs_offset: 45,
             dc_mode_accum: true,
             dc_scale: 8,
-            ac_count: 63,
+            ac_count: 50,
             ac_dequant: 0,
             use_eob: false,
             level_shift: 0,
