@@ -5,7 +5,6 @@
 # Local research corpus / copyrighted
 tmp/**
 !tmp/.gitkeep
-!tmp/README.md
 
 # Local agent instructions
 CLAUDE.md

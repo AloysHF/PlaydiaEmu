@@ -1,0 +1,132 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            artifact: playdia-emu-linux-x86_64
+          - platform: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            artifact: playdia-emu-linux-aarch64
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+            artifact: playdia-emu-macos-x86_64
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            artifact: playdia-emu-macos-aarch64
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: playdia-emu-windows-x86_64
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install Linux build dependencies
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libx11-dev libxkbcommon-dev
+
+      - name: Build standalone
+        shell: bash
+        run: |
+          cargo build -p playdia --release --target ${{ matrix.target }}
+          cargo build -p playdia --bin playdia-emu --release --target ${{ matrix.target }}
+          cargo build -p playdia-tools --release --target ${{ matrix.target }}
+
+      - name: Build libretro core
+        run: cargo build -p playdia-libretro --release --target ${{ matrix.target }}
+
+      - name: Stage libretro core
+        shell: bash
+        run: |
+          out="libretro/${{ matrix.artifact }}"
+          mkdir -p "$out"
+          rel="target/${{ matrix.target }}/release"
+          # Cargo names the cdylib after its lib target (playdia_libretro).
+          for f in "playdia_libretro.dll:playdia_libretro.dll" \
+                   "libplaydia_libretro.so:playdia_libretro.so" \
+                   "libplaydia_libretro.dylib:playdia_libretro.dylib"; do
+            src="${f%%:*}"; dst="${f##*:}"
+            if [ -f "$rel/$src" ]; then
+              cp "$rel/$src" "$out/$dst"
+              break
+            fi
+          done
+          if [ -f crates/playdia-libretro/playdia_libretro.info ]; then
+            cp crates/playdia-libretro/playdia_libretro.info "$out/playdia_libretro.info"
+          fi
+          ls -la "$out"
+
+      - name: Package standalone (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          tar -czf "dist/${{ matrix.artifact }}.tar.gz" \
+            -C "target/${{ matrix.target }}/release" playdia playdia-emu \
+            $(ls "target/${{ matrix.target }}/release"/playdia-inspect \
+                 "target/${{ matrix.target }}/release"/playdia-scan 2>/dev/null || true)
+          cp -r "libretro/${{ matrix.artifact }}" "dist/libretro-${{ matrix.artifact }}"
+
+      - name: Package standalone (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          mkdir -p dist
+          powershell -Command "Compress-Archive -Path 'target/${{ matrix.target }}/release/playdia.exe','target/${{ matrix.target }}/release/playdia-emu.exe' -DestinationPath 'dist/${{ matrix.artifact }}.zip'"
+          cp -r "libretro/${{ matrix.artifact }}" "dist/libretro-${{ matrix.artifact }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release files
+        shell: bash
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name 'playdia_libretro.*' \) -exec cp {} release/ \;
+          ls -la release
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: release/*
