@@ -79,6 +79,7 @@ impl Sh1 {
         bus.write32(self.r[15], v, diag);
     }
 
+    #[allow(dead_code)]
     fn pop32(&mut self, bus: &mut Bus, diag: &mut Diagnostics) -> u32 {
         let v = bus.read32(self.r[15], diag);
         self.r[15] = self.r[15].wrapping_add(4);
@@ -531,6 +532,7 @@ impl Sh1 {
         self.stopped = Some(CpuStop::IllegalOpcode);
     }
 
+    #[allow(unreachable_patterns, dead_code)]
     fn op_group4(&mut self, op: u16, pc: u32, bus: &mut Bus, diag: &mut Diagnostics) {
         let n = ((op >> 8) & 0xF) as usize;
         let m = ((op >> 4) & 0xF) as usize;
@@ -790,14 +792,6 @@ impl Sh1 {
     }
 
     fn op_group8(&mut self, op: u16, pc: u32, diag: &mut Diagnostics) {
-        let n = ((op >> 8) & 0xF) as usize;
-        match (op >> 8) & 0xF {
-            0x0 => {
-                let d = (op & 0xFF) as u32;
-                // write handled without bus here? need bus
-            }
-            _ => {}
-        }
         // Branch forms
         match op >> 8 {
             0x8 => {
@@ -840,11 +834,6 @@ impl Sh1 {
                 self.set_t(u32::from(self.r[0] == imm));
             }
             _ => {
-                // MOV.B R0,@(disp,Rn) etc need bus — handled in step via caller?
-                // We need bus for mem ops. Re-dispatch is awkward; treat as illegal if not branch.
-                // Actually mem ops go through execute path — op_group8 is called without bus.
-                // Fix: don't call op_group8 for mem; handle mem in execute.
-                let _ = n;
                 self.illegal(op, pc, diag);
             }
         }

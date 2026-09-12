@@ -275,6 +275,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "playdia-libretro"
+version = "0.1.0"
+dependencies = [
+ "playdia-core",
+]
+
+[[package]]
 name = "playdia-tools"
 version = "0.1.0"
 dependencies = [

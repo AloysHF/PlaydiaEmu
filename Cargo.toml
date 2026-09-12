@@ -4,6 +4,7 @@ members = [
     "crates/playdia-core",
     "crates/playdia",
     "crates/playdia-tools",
+    "crates/playdia-libretro",
 ]
 
 [workspace.package]

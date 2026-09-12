@@ -123,6 +123,8 @@ pub fn decode_state(buf: &[u8], expected: &ContentIdentity) -> Result<Vec<u8>, S
         return Err(SaveStateError::Truncated);
     }
     let plen = u32::from_le_bytes(body[off..off + 4].try_into().unwrap()) as usize;
-    let payload = body.get(off + 4..off + 4 + plen).ok_or(SaveStateError::Truncated)?;
+    let payload = body
+        .get(off + 4..off + 4 + plen)
+        .ok_or(SaveStateError::Truncated)?;
     Ok(payload.to_vec())
 }

@@ -183,13 +183,20 @@ impl Machine {
             self.lba_cursor += 1;
             let pkt = self.demux.push(&sec);
             match &pkt {
-                XaPacket::Video { .. } => {
+                XaPacket::Video { .. }
+                | XaPacket::FrameEnd { .. }
+                | XaPacket::SceneReset { .. } => {
                     self.video.ingest_packet(&pkt);
-                    self.cdx.mark_video_frame();
+                    if matches!(pkt, XaPacket::FrameEnd { .. }) {
+                        self.cdx.mark_video_frame();
+                    }
                 }
                 XaPacket::Audio { .. } => {
                     self.audio.ingest(&pkt);
                     self.cdx.mark_audio_block();
+                }
+                XaPacket::Interactive { .. } => {
+                    self.diag.note("xa_interactive");
                 }
                 XaPacket::Other { .. } => {}
             }
@@ -224,7 +231,15 @@ impl Machine {
         for r in &self.cpu.r {
             p.extend_from_slice(&r.to_le_bytes());
         }
-        for v in [self.cpu.pc, self.cpu.pr, self.cpu.sr, self.cpu.gbr, self.cpu.mach, self.cpu.macl, self.cpu.vbr] {
+        for v in [
+            self.cpu.pc,
+            self.cpu.pr,
+            self.cpu.sr,
+            self.cpu.gbr,
+            self.cpu.mach,
+            self.cpu.macl,
+            self.cpu.vbr,
+        ] {
             p.extend_from_slice(&v.to_le_bytes());
         }
         p.extend_from_slice(&self.cpu.cycles.to_le_bytes());
@@ -244,7 +259,7 @@ impl Machine {
 
     fn decode_payload(&mut self, p: &[u8]) -> Result<(), SaveStateError> {
         let mut o = 0usize;
-        let mut take = |o: &mut usize, n: usize| -> Result<&[u8], SaveStateError> {
+        let take = |o: &mut usize, n: usize| -> Result<&[u8], SaveStateError> {
             let s = p.get(*o..*o + n).ok_or(SaveStateError::Truncated)?;
             *o += n;
             Ok(s)

@@ -1,30 +1,29 @@
-//! AK8000-style XA ADPCM audio.
+//! CD-ROM XA ADPCM (Green Book) audio decoder.
 //!
-//! Block format (from reverse-engineering corpus):
-//! - variable block size 2..=36 bytes
-//! - each block expands to 60 PCM samples per channel
-//! - coding info in XA subheader selects stereo/18-bit sample size
-//!
-//! This implements a standards-oriented XA ADPCM decoder sufficient to
-//! produce continuous PCM without pops for silence and simple test tones;
-//! coefficient tables are refined against real dumps as fixtures land.
+//! Each Form2 audio sector carries 18 sound groups of 128 bytes.
+//! Native rate is 37800 or 18900 Hz; output is resampled to 44100 stereo.
 
 use crate::cd::XaPacket;
 
-pub const SAMPLE_RATE: u32 = 37800;
-pub const SAMPLES_PER_BLOCK: usize = 60;
+pub const OUT_RATE: u32 = 44100;
+pub const GROUPS_PER_SECTOR: usize = 18;
+pub const BYTES_PER_GROUP: usize = 128;
+pub const SAMPLES_PER_UNIT: usize = 28;
+
+/// Fixed-point filter coefficients (×64), standard XA set.
+const K0: [i32; 4] = [0, 60, 115, 98];
+const K1: [i32; 4] = [0, 0, -52, -55];
 
 #[derive(Debug, Clone, Default)]
 pub struct AudioDecoder {
     pub pcm: Vec<i16>,
     pub blocks: u64,
     pub bytes: u64,
-    pub filter_pos: [i32; 2],
-    pub filter_neg: [i32; 2],
-    pub hist: [[i32; 2]; 2],
-    /// Unit test tone mode: ignore bitstream, emit a quiet sine.
+    pub prev: [i32; 2],
+    pub prev2: [i32; 2],
+    /// Unit test tone: ignore bitstream, emit a quiet stereo sine.
     pub test_tone: bool,
-    pub tone_phase: f32,
+    tone_phase: f32,
 }
 
 impl AudioDecoder {
@@ -46,34 +45,107 @@ impl AudioDecoder {
         };
         self.bytes += data.len() as u64;
         if self.test_tone {
-            self.emit_test_tone(SAMPLES_PER_BLOCK);
+            self.emit_test_tone(SAMPLES_PER_UNIT * 2);
             self.blocks += 1;
             return;
         }
-        // coding: bits select bits/sample and stereo; see CDS-XA subheader.
-        let bits = coding & 0x03;
-        let stereo = coding & 0x04 != 0;
-        let block_samples = if bits == 0 { SAMPLES_PER_BLOCK } else { SAMPLES_PER_BLOCK };
-        // Without a locked coefficient set, output silence rather than garbage.
-        let ch = if stereo { 2 } else { 1 };
-        for _ in 0..block_samples {
-            for _c in 0..ch {
-                self.pcm.push(0);
-            }
-        }
+        self.decode_sector(data, *coding);
         self.blocks += 1;
-        let _ = data;
     }
 
     fn emit_test_tone(&mut self, n: usize) {
         for i in 0..n {
             let t = self.tone_phase + i as f32;
-            let v = (t * 2.0 * std::f32::consts::PI * 440.0 / SAMPLE_RATE as f32).sin();
+            let v = (t * 2.0 * std::f32::consts::PI * 440.0 / OUT_RATE as f32).sin();
             let s = (v * 3000.0) as i16;
             self.pcm.push(s);
             self.pcm.push(s);
         }
         self.tone_phase += n as f32;
+    }
+
+    fn decode_sector(&mut self, sector_data: &[u8], coding: u8) {
+        if sector_data.len() < GROUPS_PER_SECTOR * BYTES_PER_GROUP {
+            return;
+        }
+        let stereo = coding & 1 != 0;
+        let half_rate = coding & 4 != 0;
+        let native_rate: f64 = if half_rate { 18900.0 } else { 37800.0 };
+
+        let mut raw_l = vec![0i16; 4096];
+        let mut raw_r = vec![0i16; 4096];
+        let mut raw_count = 0usize;
+
+        for sg in 0..GROUPS_PER_SECTOR {
+            let grp = &sector_data[sg * BYTES_PER_GROUP..(sg + 1) * BYTES_PER_GROUP];
+            for unit in 0..8 {
+                let hi = if unit < 4 { unit } else { unit + 4 };
+                let h = grp[hi];
+                let filter = ((h >> 4) & 3) as usize;
+                let range = (h & 0xF).min(12) as i32;
+                let k0 = K0[filter];
+                let k1 = K1[filter];
+                let ch = if stereo { unit & 1 } else { 0 };
+
+                for s in 0..SAMPLES_PER_UNIT {
+                    let byte_idx = 16 + s * 4 + (unit / 2);
+                    let byte = grp[byte_idx];
+                    let nibble: i32 = if unit & 1 != 0 {
+                        ((byte as i8) >> 4) as i32
+                    } else {
+                        ((byte << 4) as i8 >> 4) as i32
+                    };
+                    let sample = nibble << (12 - range);
+                    let mut out = sample + (k0 * self.prev[ch] + k1 * self.prev2[ch] + 32) / 64;
+                    out = out.clamp(-32768, 32767);
+                    self.prev2[ch] = self.prev[ch];
+                    self.prev[ch] = out;
+
+                    if stereo {
+                        let idx = (sg * 4 + unit / 2) * SAMPLES_PER_UNIT + s;
+                        if idx < raw_l.len() {
+                            if unit & 1 != 0 {
+                                raw_r[idx] = out as i16;
+                            } else {
+                                raw_l[idx] = out as i16;
+                            }
+                            if idx + 1 > raw_count {
+                                raw_count = idx + 1;
+                            }
+                        }
+                    } else {
+                        let idx = (sg * 8 + unit) * SAMPLES_PER_UNIT + s;
+                        if idx < raw_l.len() {
+                            raw_l[idx] = out as i16;
+                            raw_r[idx] = out as i16;
+                            if idx + 1 > raw_count {
+                                raw_count = idx + 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Linear resample to 44100.
+        let out_count = (raw_count as f64 * OUT_RATE as f64 / native_rate) as usize;
+        for i in 0..out_count {
+            let pos = i as f64 * native_rate / OUT_RATE as f64;
+            let idx = pos as usize;
+            let frac = pos - idx as f64;
+            let (sl, sr) = if idx + 1 < raw_count {
+                (
+                    (raw_l[idx] as f64 * (1.0 - frac) + raw_l[idx + 1] as f64 * frac) as i16,
+                    (raw_r[idx] as f64 * (1.0 - frac) + raw_r[idx + 1] as f64 * frac) as i16,
+                )
+            } else if idx < raw_count {
+                (raw_l[idx], raw_r[idx])
+            } else {
+                break;
+            };
+            self.pcm.push(sl);
+            self.pcm.push(sr);
+        }
     }
 
     pub fn drain(&mut self) -> Vec<i16> {

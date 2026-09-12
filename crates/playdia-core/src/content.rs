@@ -56,11 +56,7 @@ impl DiscImage {
 
     /// Byte offset of LBA (ISO LBA 0 = MSF 00:02:00 for raw).
     pub fn sector_offset(&self, lba: u32) -> Option<usize> {
-        let idx = if self.raw {
-            lba as usize
-        } else {
-            lba as usize
-        };
+        let idx = if self.raw { lba as usize } else { lba as usize };
         let bps = if self.raw { RAW_SECTOR } else { COOKED_SECTOR };
         let off = idx.checked_mul(bps)?;
         if off + bps <= self.data.len() {
