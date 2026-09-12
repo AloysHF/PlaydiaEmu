@@ -37,6 +37,8 @@ pub struct CodecParams {
     pub level_shift: i32,
     pub chroma_420: bool,
     pub mb_interleaved: bool,
+    /// 0=MPEG zigzag, 1=alt, 2=raster
+    pub scan_order: u8,
 }
 
 impl Default for CodecParams {
@@ -45,14 +47,15 @@ impl Default for CodecParams {
             width: ENC_W,
             height: ENC_H,
             bs_offset: 44,
-            dc_mode_accum: false,
+            dc_mode_accum: true,
             dc_scale: 8,
-            ac_count: 10,
+            ac_count: 63,
             ac_dequant: 0,
             use_eob: false,
             level_shift: 0,
             chroma_420: true,
             mb_interleaved: true,
+            scan_order: 0,
         }
     }
 }
@@ -62,6 +65,24 @@ const ZIGZAG: [usize; 64] = [
     13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59,
     52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
 ];
+const ZIGZAG_ALT: [usize; 64] = [
+    0, 8, 16, 24, 1, 9, 2, 10, 17, 25, 32, 40, 48, 56, 57, 49, 41, 33, 26, 18, 3, 11, 4, 12, 19, 27,
+    34, 42, 50, 58, 35, 43, 51, 59, 20, 28, 5, 13, 6, 14, 21, 29, 36, 44, 52, 60, 37, 45, 53, 61,
+    22, 30, 7, 15, 23, 31, 38, 46, 54, 62, 39, 47, 55, 63,
+];
+const ZIGZAG_RASTER: [usize; 64] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+    50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+];
+
+fn scan_table(order: u8) -> &'static [usize; 64] {
+    match order {
+        1 => &ZIGZAG_ALT,
+        2 => &ZIGZAG_RASTER,
+        _ => &ZIGZAG,
+    }
+}
 
 const COS: [[i32; 8]; 8] = [
     [1448, 1448, 1448, 1448, 1448, 1448, 1448, 1448],
@@ -289,10 +310,10 @@ impl<'a> Bs<'a> {
     }
 }
 
-fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64], level_shift: i32) {
+fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64], level_shift: i32, scan: &[usize; 64]) {
     let mut matrix = [[0i32; 8]; 8];
     for i in 0..64 {
-        let z = ZIGZAG[i];
+        let z = scan[i];
         matrix[z / 8][z % 8] = coeff[i];
     }
     let mut temp = [[0i32; 8]; 8];
@@ -405,6 +426,7 @@ pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
                 let mut coeff = [0i32; 64];
                 coeff[0] = dc_val * p.dc_scale;
 
+                let scan = scan_table(p.scan_order);
                 if p.use_eob {
                     for k in 1..64 {
                         let Some(v) = bs.read_vlc() else {
@@ -415,7 +437,7 @@ pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
                         }
                         let mut val = v;
                         if p.ac_dequant == 1 {
-                            val = val * qm[ZIGZAG[k] / 8][ZIGZAG[k] % 8] * qscale / 8;
+                            val = val * qm[scan[k] / 8][scan[k] % 8] * qscale / 8;
                         }
                         coeff[k] = val;
                     }
@@ -426,14 +448,14 @@ pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
                         };
                         let mut val = v;
                         if p.ac_dequant == 1 {
-                            val = val * qm[ZIGZAG[k] / 8][ZIGZAG[k] % 8] * qscale / 8;
+                            val = val * qm[scan[k] / 8][scan[k] % 8] * qscale / 8;
                         }
                         coeff[k] = val;
                     }
                 }
 
                 let mut blk = [0u8; 64];
-                idct_block(&coeff, &mut blk, p.level_shift);
+                idct_block(&coeff, &mut blk, p.level_shift, scan);
                 blit_block(
                     &mut y_plane,
                     &mut cb_plane,

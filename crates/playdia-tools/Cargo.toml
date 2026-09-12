@@ -9,6 +9,10 @@ description = "Playdia research tools (ISO/XA inspect, fixtures)"
 name = "playdia-inspect"
 path = "src/bin/playdia_inspect.rs"
 
+[[bin]]
+name = "playdia-scan"
+path = "src/bin/playdia_scan.rs"
+
 [dependencies]
 playdia-core = { path = "../playdia-core" }
 anyhow = { workspace = true }
