@@ -2,14 +2,7 @@
 
 /// MPEG-1 luminance AC VLC (code, bits) → (run, level)
 /// Returns None if not a table entry (use escape).
-pub fn mpeg1_ac_luma(code: u32, bits: u32) -> Option<(u32, i32)> {
-    // Subset of ISO 11172-2 Table B.14 (luma DC/AC style used by still codecs).
-    // (bits, code) → (run, abs_level); sign follows.
-    #[inline]
-    fn t(bits: u32, code: u32) -> Option<(u32, i32)> {
-        Some((bits, code))
-    }
-    let _ = t;
+pub fn mpeg1_ac_luma(bits: u32, code: u32) -> Option<(u32, i32)> {
     match (bits, code) {
         (2, 0b10) => Some((0, 0)),          // EOB
         (3, 0b001) => Some((0, 1)),          // 0,1
