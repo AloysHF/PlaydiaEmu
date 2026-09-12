@@ -1,32 +1,35 @@
-//! LSB-first bit reader for AK8000 entropy streams.
+//! Bit reader for experimental AK8000 entropy decoding.
 
-/// Read bits from a buffer where each byte is stored LSB-first.
-/// After reversing each byte, bits are consumed MSB-first.
+/// Read bits from each byte in the selected order.
 #[derive(Debug, Clone)]
-pub struct LsbBitReader<'a> {
+pub struct BitReader<'a> {
     data: &'a [u8],
-    pos: usize, // bit index into reversed stream
+    pos: usize,
     bits: usize,
-    rev: [u8; 256],
+    order: [u8; 256],
 }
 
-impl<'a> LsbBitReader<'a> {
-    pub fn new(data: &'a [u8]) -> Self {
-        let mut rev = [0u8; 256];
-        for (i, r) in rev.iter_mut().enumerate() {
-            *r = (i as u8).reverse_bits();
+impl<'a> BitReader<'a> {
+    pub fn new(data: &'a [u8], lsb_first: bool) -> Self {
+        let mut order = [0u8; 256];
+        for (i, byte) in order.iter_mut().enumerate() {
+            *byte = if lsb_first {
+                (i as u8).reverse_bits()
+            } else {
+                i as u8
+            };
         }
         Self {
             data,
             pos: 0,
             bits: data.len() * 8,
-            rev,
+            order,
         }
     }
 
     #[inline]
     fn byte_at(&self, i: usize) -> u8 {
-        self.rev[self.data[i] as usize]
+        self.order[self.data[i] as usize]
     }
 
     pub fn get1(&mut self) -> u32 {

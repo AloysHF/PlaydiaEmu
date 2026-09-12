@@ -1,6 +1,16 @@
 //! Decode stability: identical packets must yield identical frames.
 
+use playdia_core::bitstream::BitReader;
 use playdia_core::video::{decode_packet_frames, parse_packet_header, CodecParams};
+
+#[test]
+fn bit_reader_honors_selected_byte_order() {
+    let data = [0b0000_0010, 0b0100_0000];
+    let mut lsb = BitReader::new(&data, true);
+    let mut msb = BitReader::new(&data, false);
+    assert_eq!(lsb.read(9), 0x80);
+    assert_eq!(msb.read(9), 0x04);
+}
 
 fn sample_packet() -> Vec<u8> {
     let p =

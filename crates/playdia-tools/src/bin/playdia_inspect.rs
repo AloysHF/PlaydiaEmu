@@ -15,6 +15,9 @@ struct Cli {
     /// Report assembled video packet headers and length frequencies.
     #[arg(long)]
     video_headers: bool,
+    /// Rank video packets with low byte entropy or long 55/AA byte runs.
+    #[arg(long)]
+    video_candidates: bool,
 }
 
 fn main() -> Result<()> {
@@ -59,27 +62,77 @@ fn main() -> Result<()> {
             "stream_track={} f1={} f2={} f3={} audio={}",
             t.number, f1, f2, f3, aud
         );
-        if cli.video_headers {
-            inspect_video_headers(t);
+        if cli.video_headers || cli.video_candidates {
+            inspect_video_headers(t, cli.video_candidates);
         }
     }
     Ok(())
 }
 
-fn inspect_video_headers(track: &Track) {
+#[derive(Clone, Copy)]
+struct VideoCandidate {
+    index: u64,
+    first_lba: usize,
+    length: usize,
+    segment_code: u8,
+    entropy: f64,
+    alternating_byte_run: usize,
+}
+
+fn body_entropy(data: &[u8]) -> f64 {
+    let mut counts = [0usize; 256];
+    for &byte in data {
+        counts[byte as usize] += 1;
+    }
+    let total = data.len() as f64;
+    counts
+        .iter()
+        .filter(|&&count| count != 0)
+        .map(|&count| {
+            let p = count as f64 / total;
+            -p * p.log2()
+        })
+        .sum()
+}
+
+fn longest_alternating_byte_run(data: &[u8]) -> usize {
+    let mut previous = 0;
+    let mut current = 0;
+    let mut longest = 0;
+    for &byte in data {
+        current = if (byte == 0x55 || byte == 0xAA) && byte == previous {
+            current + 1
+        } else if byte == 0x55 || byte == 0xAA {
+            1
+        } else {
+            0
+        };
+        longest = longest.max(current);
+        previous = byte;
+    }
+    longest
+}
+
+fn inspect_video_headers(track: &Track, show_candidates: bool) {
     let mut packet = Vec::new();
+    let mut first_lba = 0usize;
     let mut overflow = false;
     let mut packets = 0u64;
     let mut valid = 0u64;
     let mut identical_quantizers = 0u64;
     let mut codes = BTreeMap::<u8, u64>::new();
     let mut lengths = BTreeMap::<usize, u64>::new();
-    for raw in track.data.as_chunks::<2352>().0 {
+    let mut lowest_entropy = Vec::<VideoCandidate>::new();
+    let mut longest_runs = Vec::<VideoCandidate>::new();
+    for (lba, raw) in track.data.as_chunks::<2352>().0.iter().enumerate() {
         if raw[15] != 2 || raw[16] != 1 || raw[17] != 0 || raw[18] & 0x08 == 0 {
             continue;
         }
         match raw[24] {
             0xF1 if packet.len() + 2047 <= 256 * 1024 => {
+                if packet.is_empty() {
+                    first_lba = lba;
+                }
                 packet.extend_from_slice(&raw[25..24 + 2048]);
             }
             0xF1 => overflow = true,
@@ -94,6 +147,25 @@ fn inspect_video_headers(track: &Track) {
                             identical_quantizers +=
                                 u64::from(header.quant_luma == header.quant_chroma);
                             *codes.entry(header.segment_code).or_default() += 1;
+                            if show_candidates && len > 40 + 256 {
+                                let body = &packet[40..len];
+                                let candidate = VideoCandidate {
+                                    index: packets,
+                                    first_lba,
+                                    length: len,
+                                    segment_code: header.segment_code,
+                                    entropy: body_entropy(body),
+                                    alternating_byte_run: longest_alternating_byte_run(body),
+                                };
+                                lowest_entropy.push(candidate);
+                                lowest_entropy.sort_by(|a, b| a.entropy.total_cmp(&b.entropy));
+                                lowest_entropy.truncate(8);
+                                longest_runs.push(candidate);
+                                longest_runs.sort_by(|a, b| {
+                                    b.alternating_byte_run.cmp(&a.alternating_byte_run)
+                                });
+                                longest_runs.truncate(8);
+                            }
                         }
                     }
                     packet.clear();
@@ -120,5 +192,29 @@ fn inspect_video_headers(track: &Track) {
     common_lengths.sort_by_key(|&(length, count)| (std::cmp::Reverse(count), length));
     for (length, count) in common_lengths.into_iter().take(10) {
         println!("video_packet_bytes={length} packets={count}");
+    }
+    if show_candidates {
+        for candidate in lowest_entropy {
+            println!(
+                "low_entropy_packet={} track_lba={} bytes={} code={:02x} entropy={:.3} alternating_run={}",
+                candidate.index,
+                candidate.first_lba,
+                candidate.length,
+                candidate.segment_code,
+                candidate.entropy,
+                candidate.alternating_byte_run
+            );
+        }
+        for candidate in longest_runs {
+            println!(
+                "long_alternating_run_packet={} track_lba={} bytes={} code={:02x} entropy={:.3} alternating_run={}",
+                candidate.index,
+                candidate.first_lba,
+                candidate.length,
+                candidate.segment_code,
+                candidate.entropy,
+                candidate.alternating_byte_run
+            );
+        }
     }
 }

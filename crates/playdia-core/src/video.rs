@@ -1,13 +1,11 @@
 //! Playdia CDXA video decoder (HLE).
 //!
-//! Packet format confirmed on Redump titles:
-//! `00 80 04 | QS | qtable[16]×2 | 00 80 24 | 00 | dcY | dcCb | dcCr | flags | bitstream`
+//! Packet prefix confirmed on Redump titles:
+//! `00 80 04 | QS | qtable[16]×2 | 00 80 <segment code> | body`
 //!
-//! Default codec profile follows reverse-engineered defaults that produce
-//! structured output on real discs (192×144 4:2:0, MB-interleaved, fixed
-//! AC count, init+diff DC, MPEG-1-like size VLC).
+//! The entropy decoder is experimental and does not reproduce original pixels.
 
-use crate::bitstream::LsbBitReader;
+use crate::bitstream::BitReader;
 use crate::cd::XaPacket;
 
 pub const WIDTH: usize = 320;
@@ -66,7 +64,7 @@ pub struct CodecParams {
     pub mb_interleaved: bool,
     /// 0=MPEG zigzag, 1=alt, 2=raster
     pub scan_order: u8,
-    /// Bit-reverse each byte before reading (AK8000 spec).
+    /// Read each entropy byte least-significant bit first.
     pub lsb_first: bool,
 }
 
@@ -86,8 +84,7 @@ impl Default for CodecParams {
             chroma_420: true,
             mb_interleaved: true,
             scan_order: 0,
-            // WizzardSK documents MSB-first modified MPEG-1 DC VLC.
-            lsb_first: false,
+            lsb_first: true,
         }
     }
 }
@@ -339,7 +336,7 @@ fn rgb888_to_555(r: u8, g: u8, b: u8) -> u16 {
     r5 | (g5 << 5) | (b5 << 10)
 }
 
-/// Decode all complete frames inside one F1 packet (typically ~3).
+/// Attempt to decode pictures from one assembled F1 packet.
 pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)> {
     if buf.len() < 44 {
         return Vec::new();
@@ -364,8 +361,7 @@ pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)>
     if end <= bso {
         return Vec::new();
     }
-    // AK8000 entropy body is LSB-first after start-codes.
-    let mut bs = LsbBitReader::new(&buf[bso..end]);
+    let mut bs = BitReader::new(&buf[bso..end], p.lsb_first);
     let mw = p.width / 16;
     let mh = p.height / 16;
     let bpm = if p.chroma_420 { 6 } else { 4 };

@@ -71,6 +71,14 @@ The current default reads a fixed number of raw AC coefficients per block;
 `--full-decode` applies experimental quantization scaling. Pixel-accurate
 AK8000 VLC is still unsolved — treat
 frames as approximate unless fixture-proven against real hardware references.
+Some short packets contain long `0x55`/`0xAA` byte runs. The inspect tool can
+locate them with `--video-candidates`, but their codeword and pixel meanings
+remain unverified.
+An independent survey of 35 data-track discs found the expected initial packet
+prefix in all 900,268 assembled video packets; it did not validate picture decode.
+The experimental decoder's `lsb_first` parameter now selects the actual entropy
+byte bit order. Its default preserves the previous LSB-first behavior; neither
+bit order has been validated against exact hardware pixels.
 
 ## Memory map (LLE / hardware access dump)
 

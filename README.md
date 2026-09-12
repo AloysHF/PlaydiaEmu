@@ -101,6 +101,9 @@ cargo run --release -p playdia-tools -- path\to\game.cue
 
 For video packet header frequencies, run
 `cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers`.
+Add `--video-candidates` to rank packets by low body-byte entropy and long
+`0x55`/`0xAA` runs. The reported track-relative LBAs help target codec research;
+these patterns do not establish decoded pixels or a VLC table.
 
 ## Testing
 
