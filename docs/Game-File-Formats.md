@@ -59,6 +59,11 @@ remain under investigation.
 A complete frame packet typically starts with `00 80 04` (quant scale +
 qtables), then F1 fragments, then F2 end.
 
+The first 40 bytes contain a quant scale, two 16-byte quantizer tables, and a
+secondary `00 80 XX` marker with a following flag byte. The secondary code is
+not always `0x24`; other values appear on real discs. Its meaning and the
+number of display pictures represented by each packet remain unverified.
+
 ## Video path (approximate)
 
 The decoder is a proprietary MPEG-1-like DCT path targeting 320×240 RGB555.

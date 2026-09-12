@@ -99,6 +99,9 @@ in RetroArch's `cores/` directory.
 cargo run --release -p playdia-tools -- path\to\game.cue
 ```
 
+For video packet header frequencies, run
+`cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers`.
+
 ## Testing
 
 Run the unit tests:

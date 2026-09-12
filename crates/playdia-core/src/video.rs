@@ -17,6 +17,32 @@ pub const ENC_H: usize = 144;
 const ACC_CAP: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VideoPacketHeader {
+    pub qscale: u8,
+    pub quant_luma: [u8; 16],
+    pub quant_chroma: [u8; 16],
+    pub segment_code: u8,
+    pub flags: u8,
+}
+
+pub fn parse_packet_header(buf: &[u8]) -> Option<VideoPacketHeader> {
+    if buf.len() < 40 || buf[..3] != [0x00, 0x80, 0x04] || buf[36..38] != [0x00, 0x80] {
+        return None;
+    }
+    let mut quant_luma = [0; 16];
+    let mut quant_chroma = [0; 16];
+    quant_luma.copy_from_slice(&buf[4..20]);
+    quant_chroma.copy_from_slice(&buf[20..36]);
+    Some(VideoPacketHeader {
+        qscale: buf[3],
+        quant_luma,
+        quant_chroma,
+        segment_code: buf[38],
+        flags: buf[39],
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameKind {
     None,
     Still,
@@ -318,12 +344,11 @@ pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)>
     if buf.len() < 44 {
         return Vec::new();
     }
-    if !(buf[0] == 0x00 && buf[1] == 0x80 && buf[2] == 0x04) {
+    let Some(header) = parse_packet_header(buf) else {
         return Vec::new();
-    }
-    let qscale = buf[3].max(1) as i32;
-    let mut qtable = [0u8; 16];
-    qtable.copy_from_slice(&buf[4..20]);
+    };
+    let qscale = header.qscale.max(1) as i32;
+    let qtable = header.quant_luma;
     let mut qm = [[0i32; 8]; 8];
     for i in 0..8 {
         for j in 0..8 {

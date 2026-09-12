@@ -121,7 +121,12 @@ F1/F2/F3 / audio sector counts:
 ```powershell
 cargo run --release -p playdia -- inspect path\to\game.cue
 cargo run --release -p playdia-tools -- path\to\game.cue
+cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers
 ```
+
+The last command assembles F1/F2 video packets and reports header validation,
+secondary segment-code frequencies, and packet lengths without exporting video
+data.
 
 ## LLE headless (optional)
 

@@ -1,6 +1,6 @@
 //! Decode stability: identical packets must yield identical frames.
 
-use playdia_core::video::{decode_packet_frames, CodecParams};
+use playdia_core::video::{decode_packet_frames, parse_packet_header, CodecParams};
 
 fn sample_packet() -> Vec<u8> {
     let p =
@@ -50,4 +50,22 @@ fn same_packet_same_output() {
 #[test]
 fn packet_header_rejects_garbage() {
     assert!(decode_packet_frames(&[0u8; 64], CodecParams::default()).is_empty());
+}
+
+#[test]
+fn packet_header_preserves_both_quantizers_and_segment_code() {
+    let mut packet = vec![0; 44];
+    packet[..3].copy_from_slice(&[0, 0x80, 4]);
+    packet[3] = 13;
+    packet[4..20].fill(7);
+    packet[20..36].fill(11);
+    packet[36..40].copy_from_slice(&[0, 0x80, 0x21, 6]);
+    let header = parse_packet_header(&packet).unwrap();
+    assert_eq!(header.qscale, 13);
+    assert_eq!(header.quant_luma, [7; 16]);
+    assert_eq!(header.quant_chroma, [11; 16]);
+    assert_eq!(header.segment_code, 0x21);
+    assert_eq!(header.flags, 6);
+    packet[36] = 1;
+    assert!(parse_packet_header(&packet).is_none());
 }
