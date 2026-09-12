@@ -189,6 +189,8 @@ impl DiscPlayer {
             }
         }
 
+        // Present one decoded sub-frame per host tick when available.
+        let _ = self.video.present_next();
         self.input.clear_edges();
         self.frame += 1;
 

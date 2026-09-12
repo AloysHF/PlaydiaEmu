@@ -49,9 +49,9 @@ impl Default for CodecParams {
             bs_offset: 45,
             dc_mode_accum: true,
             dc_scale: 8,
-            ac_count: 50,
+            ac_count: 63,
             ac_dequant: 0,
-            use_eob: false,
+            use_eob: true,
             level_shift: 0,
             chroma_420: true,
             mb_interleaved: true,
@@ -109,8 +109,10 @@ pub struct VideoDecoder {
     pub last_qtable: [u8; 16],
     pub params: CodecParams,
     pub last_blocks: usize,
-    /// Cache: packet CRC → RGB555 encoded image (stable stills).
-    cache: std::collections::HashMap<u32, (Vec<u8>, usize)>,
+    /// Cache: packet CRC → all complete frames in packet.
+    cache: std::collections::HashMap<u32, Vec<Vec<u8>>>,
+    /// Frames from the current packet not yet presented.
+    pending: std::collections::VecDeque<Vec<u8>>,
 }
 
 impl Default for VideoDecoder {
@@ -135,6 +137,7 @@ impl VideoDecoder {
             params: CodecParams::default(),
             last_blocks: 0,
             cache: std::collections::HashMap::new(),
+            pending: std::collections::VecDeque::new(),
         }
     }
 
@@ -185,31 +188,44 @@ impl VideoDecoder {
         let buf = std::mem::take(&mut self.acc);
         self.last_packet_len = buf.len();
         let crc = crate::state::crc32(&buf);
-        if let Some((rgb, blocks)) = self.cache.get(&crc).cloned() {
-            self.blit_encoded(&rgb);
-            self.frames_decoded += 1;
+        if let Some(frames) = self.cache.get(&crc).cloned() {
+            for f in frames {
+                self.pending.push_back(f);
+            }
             self.last_kind = FrameKind::Still;
-            self.last_blocks = blocks;
             self.acc = Vec::new();
             return;
         }
-        match decode_packet(&buf, self.params) {
-            Some((rgb555, blocks)) => {
-                self.cache.insert(crc, (rgb555.clone(), blocks));
-                self.blit_encoded(&rgb555);
-                self.frames_decoded += 1;
-                self.last_kind = FrameKind::Progressive;
-                self.last_blocks = blocks;
-                if buf.len() > 3 {
-                    self.last_qs = buf[3];
-                }
-                if buf.len() >= 20 {
-                    self.last_qtable.copy_from_slice(&buf[4..20]);
-                }
+        let frames = decode_packet_frames(&buf, self.params);
+        if frames.is_empty() {
+            self.frames_failed += 1;
+        } else {
+            if buf.len() > 3 {
+                self.last_qs = buf[3];
             }
-            None => self.frames_failed += 1,
+            if buf.len() >= 20 {
+                self.last_qtable.copy_from_slice(&buf[4..20]);
+            }
+            self.last_blocks = frames.last().map(|f| f.1).unwrap_or(0);
+            let rgb_list: Vec<Vec<u8>> = frames.iter().map(|f| f.0.clone()).collect();
+            self.cache.insert(crc, rgb_list);
+            for (rgb, _) in frames {
+                self.pending.push_back(rgb);
+            }
+            self.last_kind = FrameKind::Progressive;
         }
         self.acc = Vec::new();
+    }
+
+    /// Present the next pending frame (call once per host frame).
+    pub fn present_next(&mut self) -> bool {
+        if let Some(rgb) = self.pending.pop_front() {
+            self.blit_encoded(&rgb);
+            self.frames_decoded += 1;
+            true
+        } else {
+            false
+        }
     }
 
     fn blit_encoded(&mut self, rgb: &[u8]) {
@@ -357,13 +373,13 @@ fn rgb888_to_555(r: u8, g: u8, b: u8) -> u16 {
     r5 | (g5 << 5) | (b5 << 10)
 }
 
-/// Decode packet → (ENC_W×ENC_H RGB555 LE, blocks decoded).
-pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
+/// Decode all complete frames inside one F1 packet (typically ~3).
+pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)> {
     if buf.len() < 44 {
-        return None;
+        return Vec::new();
     }
     if !(buf[0] == 0x00 && buf[1] == 0x80 && buf[2] == 0x04) {
-        return None;
+        return Vec::new();
     }
     let qscale = buf[3].max(1) as i32;
     let mut qtable = [0u8; 16];
@@ -374,119 +390,105 @@ pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
             qm[i][j] = qtable[(i / 2) * 4 + (j / 2)] as i32;
         }
     }
-
-    let dc_init = [
-        buf[40] as i32,
-        buf[41] as i32,
-        buf[42] as i32,
-    ];
+    let dc_init = [buf[40] as i32, buf[41] as i32, buf[42] as i32];
     let bso = p.bs_offset.min(buf.len());
     let mut end = buf.len();
     while end > bso && buf[end - 1] == 0xFF {
         end -= 1;
     }
     if end <= bso {
-        return None;
+        return Vec::new();
     }
     let mut bs = Bs::new(&buf[bso..end]);
-
-    let mbpx = 16usize;
-    let mw = p.width / mbpx;
-    let mh = p.height / mbpx;
+    let mw = p.width / 16;
+    let mh = p.height / 16;
     let bpm = if p.chroma_420 { 6 } else { 4 };
     if mw == 0 || mh == 0 {
-        return None;
+        return Vec::new();
     }
+    let nblocks = mw * mh * bpm;
+    let scan = scan_table(p.scan_order);
+    let mut out = Vec::new();
 
-    let mut y_plane = vec![(128 + p.level_shift).clamp(0, 255) as u8; ENC_W * ENC_H];
-    let mut cb_plane = vec![128u8; (ENC_W / 2) * (ENC_H / 2)];
-    let mut cr_plane = vec![128u8; (ENC_W / 2) * (ENC_H / 2)];
-    let mut dc_pred = dc_init;
-    let mut blocks_ok = 0usize;
+    for _frame in 0..6 {
+        let mut y_plane = vec![(128 + p.level_shift).clamp(0, 255) as u8; ENC_W * ENC_H];
+        let mut cb_plane = vec![128u8; (ENC_W / 2) * (ENC_H / 2)];
+        let mut cr_plane = vec![128u8; (ENC_W / 2) * (ENC_H / 2)];
+        let mut dc_pred = dc_init;
+        let mut blocks_ok = 0usize;
 
-    'mb: for mb_y in 0..mh {
-        for mb_x in 0..mw {
-            for bl in 0..bpm {
-                let comp = if !p.mb_interleaved {
-                    // plane mode handled roughly as Y then chroma by index
-                    if blocks_ok < mw * mh * 4 {
-                        0
-                    } else if blocks_ok < mw * mh * 5 {
-                        1
+        'mb: for mb_y in 0..mh {
+            for mb_x in 0..mw {
+                for bl in 0..bpm {
+                    let comp = if bl < 4 { 0 } else if bl == 4 { 1 } else { 2 };
+                    let Some(diff) = bs.read_vlc() else {
+                        break 'mb;
+                    };
+                    let dc_val = if p.dc_mode_accum {
+                        dc_pred[comp] = (dc_pred[comp] + diff).clamp(0, 255);
+                        dc_pred[comp]
                     } else {
-                        2
-                    }
-                } else if bl < 4 {
-                    0
-                } else if bl == 4 {
-                    1
-                } else {
-                    2
-                };
-
-                let Some(diff) = bs.read_vlc() else {
-                    if blocks_ok == 0 {
-                        return None;
-                    }
-                    break 'mb;
-                };
-                let dc_val = if p.dc_mode_accum {
-                    dc_pred[comp] = (dc_pred[comp] + diff).clamp(0, 255);
-                    dc_pred[comp]
-                } else {
-                    (dc_init[comp] + diff).clamp(0, 255)
-                };
-                let mut coeff = [0i32; 64];
-                coeff[0] = dc_val * p.dc_scale;
-
-                let scan = scan_table(p.scan_order);
-                if p.use_eob {
-                    for k in 1..64 {
-                        let Some(v) = bs.read_vlc() else {
-                            break;
-                        };
-                        if v == 0 {
-                            break;
+                        (dc_init[comp] + diff).clamp(0, 255)
+                    };
+                    let mut coeff = [0i32; 64];
+                    coeff[0] = dc_val * p.dc_scale;
+                    if p.use_eob {
+                        for k in 1..64 {
+                            let Some(v) = bs.read_vlc() else {
+                                break 'mb;
+                            };
+                            if v == 0 {
+                                break;
+                            }
+                            let mut val = v;
+                            if p.ac_dequant == 1 {
+                                let pos = scan[k];
+                                val = val * qm[pos / 8][pos % 8] * qscale / 8;
+                            } else if p.ac_dequant == 2 {
+                                let pos = scan[k];
+                                val *= qm[pos / 8][pos % 8];
+                            }
+                            coeff[k] = val;
                         }
-                        let mut val = v;
-                        if p.ac_dequant == 1 {
-                            val = val * qm[scan[k] / 8][scan[k] % 8] * qscale / 8;
+                    } else {
+                        for k in 1..=p.ac_count.min(63) {
+                            let Some(v) = bs.read_vlc() else {
+                                break 'mb;
+                            };
+                            let mut val = v;
+                            if p.ac_dequant == 1 {
+                                let pos = scan[k];
+                                val = val * qm[pos / 8][pos % 8] * qscale / 8;
+                            } else if p.ac_dequant == 2 {
+                                let pos = scan[k];
+                                val *= qm[pos / 8][pos % 8];
+                            }
+                            coeff[k] = val;
                         }
-                        coeff[k] = val;
                     }
-                } else {
-                    for k in 1..=p.ac_count.min(63) {
-                        let Some(v) = bs.read_vlc() else {
-                            break;
-                        };
-                        let mut val = v;
-                        if p.ac_dequant == 1 {
-                            val = val * qm[scan[k] / 8][scan[k] % 8] * qscale / 8;
-                        }
-                        coeff[k] = val;
-                    }
+                    let mut blk = [0u8; 64];
+                    idct_block(&coeff, &mut blk, p.level_shift, scan);
+                    blit_block(&mut y_plane, &mut cb_plane, &mut cr_plane, mb_x, mb_y, bl, &blk);
+                    blocks_ok += 1;
                 }
-
-                let mut blk = [0u8; 64];
-                idct_block(&coeff, &mut blk, p.level_shift, scan);
-                blit_block(
-                    &mut y_plane,
-                    &mut cb_plane,
-                    &mut cr_plane,
-                    mb_x,
-                    mb_y,
-                    bl,
-                    &blk,
-                );
-                blocks_ok += 1;
             }
         }
+        if blocks_ok == 0 {
+            break;
+        }
+        if blocks_ok >= nblocks * 9 / 10 {
+            out.push((compose(&y_plane, &cb_plane, &cr_plane), blocks_ok));
+        }
+        if blocks_ok < nblocks || bs.bits.saturating_sub(bs.pos) < 64 {
+            break;
+        }
     }
+    out
+}
 
-    if blocks_ok == 0 {
-        return None;
-    }
-    Some((compose(&y_plane, &cb_plane, &cr_plane), blocks_ok))
+/// Decode packet → last complete frame.
+pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
+    decode_packet_frames(buf, p).into_iter().next_back()
 }
 
 fn blit_block(
