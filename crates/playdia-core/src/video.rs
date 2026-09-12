@@ -7,6 +7,7 @@
 //! structured output on real discs (192×144 4:2:0, MB-interleaved, fixed
 //! AC count, init+diff DC, MPEG-1-like size VLC).
 
+use crate::bitstream::LsbBitReader;
 use crate::cd::XaPacket;
 
 pub const WIDTH: usize = 320;
@@ -39,6 +40,8 @@ pub struct CodecParams {
     pub mb_interleaved: bool,
     /// 0=MPEG zigzag, 1=alt, 2=raster
     pub scan_order: u8,
+    /// Bit-reverse each byte before reading (AK8000 spec).
+    pub lsb_first: bool,
 }
 
 impl Default for CodecParams {
@@ -46,7 +49,7 @@ impl Default for CodecParams {
         Self {
             width: ENC_W,
             height: ENC_H,
-            bs_offset: 45,
+            bs_offset: 39,
             dc_mode_accum: true,
             dc_scale: 8,
             ac_count: 63,
@@ -56,6 +59,7 @@ impl Default for CodecParams {
             chroma_420: true,
             mb_interleaved: true,
             scan_order: 0,
+            lsb_first: true,
         }
     }
 }
@@ -267,78 +271,6 @@ impl VideoDecoder {
     }
 }
 
-struct Bs<'a> {
-    data: &'a [u8],
-    pos: usize,
-    bits: usize,
-}
-
-impl<'a> Bs<'a> {
-    fn new(data: &'a [u8]) -> Self {
-        Self {
-            data,
-            pos: 0,
-            bits: data.len() * 8,
-        }
-    }
-
-    fn get1(&mut self) -> u32 {
-        if self.pos >= self.bits {
-            return 0;
-        }
-        let p = self.pos;
-        self.pos += 1;
-        ((self.data[p >> 3] >> (7 - (p & 7))) & 1) as u32
-    }
-
-    fn read(&mut self, n: u32) -> i32 {
-        let mut v = 0i32;
-        for _ in 0..n {
-            v = (v << 1) | self.get1() as i32;
-        }
-        v
-    }
-
-    /// MPEG-1 luminance DC size VLC with Playdia size-7/8 6-bit forms.
-    fn read_vlc(&mut self) -> Option<i32> {
-        if self.pos >= self.bits {
-            return None;
-        }
-        let size = if self.get1() == 0 {
-            if self.get1() == 1 {
-                2
-            } else {
-                1
-            }
-        } else if self.get1() == 0 {
-            if self.get1() == 1 {
-                3
-            } else {
-                0
-            }
-        } else if self.get1() == 0 {
-            4
-        } else if self.get1() == 0 {
-            5
-        } else if self.get1() == 0 {
-            6
-        } else if self.get1() == 1 {
-            8
-        } else {
-            7
-        };
-        if size == 0 {
-            return Some(0);
-        }
-        let val = self.read(size as u32);
-        if val < (1 << (size - 1)) {
-            Some(val - ((1 << size) - 1))
-        } else {
-            Some(val)
-        }
-    }
-}
-
 fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64], level_shift: i32, scan: &[usize; 64]) {
     let mut matrix = [[0i32; 8]; 8];
     for i in 0..64 {
@@ -399,7 +331,8 @@ pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)>
     if end <= bso {
         return Vec::new();
     }
-    let mut bs = Bs::new(&buf[bso..end]);
+    // AK8000 entropy body is LSB-first after start-codes.
+    let mut bs = LsbBitReader::new(&buf[bso..end]);
     let mw = p.width / 16;
     let mh = p.height / 16;
     let bpm = if p.chroma_420 { 6 } else { 4 };
@@ -479,7 +412,7 @@ pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)>
         if blocks_ok >= nblocks * 9 / 10 {
             out.push((compose(&y_plane, &cb_plane, &cr_plane), blocks_ok));
         }
-        if blocks_ok < nblocks || bs.bits.saturating_sub(bs.pos) < 64 {
+        if blocks_ok < nblocks || bs.bits().saturating_sub(bs.pos()) < 64 {
             break;
         }
     }

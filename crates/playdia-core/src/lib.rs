@@ -4,6 +4,7 @@
 
 pub mod ac_tables;
 pub mod audio;
+pub mod bitstream;
 pub mod bus;
 pub mod cd;
 pub mod cdx;
