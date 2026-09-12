@@ -3,6 +3,11 @@
 //! Implements the classic libretro C ABI so the core can be loaded by
 //! RetroArch-compatible frontends once a disc image is supplied.
 
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::field_reassign_with_default)]
+#![allow(clippy::chunks_exact_to_as_chunks)]
+#![allow(clippy::if_same_then_else)]
+
 use playdia_core::machine::{Machine, MachineConfig};
 use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 use std::ffi::c_void;

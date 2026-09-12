@@ -429,7 +429,7 @@ impl Sh1 {
                     // SHAD
                     let s = self.r[m] as i32;
                     if s >= 0 {
-                        self.r[n] = self.r[n] << (s & 0x1F);
+                        self.r[n] <<= s & 0x1F;
                     } else {
                         let sh = ((-s) & 0x1F) as u32;
                         let v = self.r[n] as i32;
@@ -440,7 +440,7 @@ impl Sh1 {
                     // SHLD
                     let s = self.r[m] as i32;
                     if s >= 0 {
-                        self.r[n] = self.r[n] >> (s & 0x1F);
+                        self.r[n] >>= s & 0x1F;
                     } else {
                         let sh = ((-s) & 0x1F) as u32;
                         self.r[n] = if sh == 0 { self.r[n] } else { self.r[n] << sh };
@@ -532,7 +532,7 @@ impl Sh1 {
         self.stopped = Some(CpuStop::IllegalOpcode);
     }
 
-    #[allow(unreachable_patterns, dead_code)]
+    #[allow(unreachable_patterns, dead_code, clippy::match_overlapping_arm)]
     fn op_group4(&mut self, op: u16, pc: u32, bus: &mut Bus, diag: &mut Diagnostics) {
         let n = ((op >> 8) & 0xF) as usize;
         let m = ((op >> 4) & 0xF) as usize;

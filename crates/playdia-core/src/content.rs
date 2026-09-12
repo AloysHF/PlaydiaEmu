@@ -33,9 +33,9 @@ impl DiscImage {
         if bytes.is_empty() {
             return Err(LoadError::Empty);
         }
-        let (raw, total) = if bytes.len() % RAW_SECTOR == 0 && bytes.len() >= RAW_SECTOR {
+        let (raw, total) = if bytes.len().is_multiple_of(RAW_SECTOR) && bytes.len() >= RAW_SECTOR {
             (true, (bytes.len() / RAW_SECTOR) as u32)
-        } else if bytes.len() % COOKED_SECTOR == 0 {
+        } else if bytes.len().is_multiple_of(COOKED_SECTOR) {
             (false, (bytes.len() / COOKED_SECTOR) as u32)
         } else {
             return Err(LoadError::BadDiscSize(bytes.len()));
@@ -56,7 +56,7 @@ impl DiscImage {
 
     /// Byte offset of LBA (ISO LBA 0 = MSF 00:02:00 for raw).
     pub fn sector_offset(&self, lba: u32) -> Option<usize> {
-        let idx = if self.raw { lba as usize } else { lba as usize };
+        let idx = lba as usize;
         let bps = if self.raw { RAW_SECTOR } else { COOKED_SECTOR };
         let off = idx.checked_mul(bps)?;
         if off + bps <= self.data.len() {

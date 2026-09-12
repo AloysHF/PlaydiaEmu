@@ -63,12 +63,12 @@ impl Bus {
     }
 
     fn map_slice(&mut self, addr: u32, len: usize) -> Option<(&mut [u8], usize)> {
-        fn pick<'a>(
+        fn pick(
             base: u32,
-            buf: &'a mut [u8],
+            buf: &mut [u8],
             addr: u32,
             len: usize,
-        ) -> Option<(&'a mut [u8], usize)> {
+        ) -> Option<(&mut [u8], usize)> {
             if addr < base {
                 return None;
             }

@@ -3,13 +3,13 @@
 //! Native output surface is 320×240 RGB555. Encoded frames are typically a
 //! centered 192×144 (or similar) 4:2:0 image inside that surface.
 //!
-//! Packet assembly (Mode2 Form1 data, channel 0, submode Data bit):
-//! - F1 sectors append payload[1..] into an accumulator
-//! - F2 (submode 0x08) marks frame end; decode if buffer starts with 00 80 04
-//! - F3 resets the accumulator
+//! Packet assembly uses Mode2 Form1 data (channel 0, submode Data bit):
+//! F1 sectors append payload[1..] into an accumulator; F2 (submode 0x08)
+//! marks frame end (decode if buffer starts with 00 80 04); F3 resets the
+//! accumulator.
 //!
-//! The bitstream decoder implements the reverse-engineered MPEG-1-like DC VLC
-//! + zig-zag AC path with integer IDCT. Exact AC dequant tables are still
+//! The bitstream decoder implements a reverse-engineered MPEG-1-like DC VLC
+//! and zig-zag AC path with integer IDCT. Exact AC dequant tables are still
 //! being locked against real-hardware reference frames.
 
 use crate::cd::XaPacket;
@@ -213,20 +213,20 @@ impl<'a> Bs<'a> {
         if self.pos >= self.bits {
             return None;
         }
-        let size;
-        if self.get1() == 0 {
-            size = if self.get1() == 1 { 2 } else { 1 };
+        
+        let size = if self.get1() == 0 {
+            if self.get1() == 1 { 2 } else { 1 }
         } else if self.get1() == 0 {
-            size = if self.get1() == 1 { 3 } else { 0 };
+            if self.get1() == 1 { 3 } else { 0 }
         } else if self.get1() == 0 {
-            size = 4;
+            4
         } else if self.get1() == 0 {
-            size = 5;
+            5
         } else if self.get1() == 0 {
-            size = 6;
+            6
         } else {
-            size = if self.get1() == 1 { 8 } else { 7 };
-        }
+            if self.get1() == 1 { 8 } else { 7 }
+        };
         Some(size)
     }
 
@@ -423,7 +423,7 @@ fn compose(y: &[u8], cb: &[u8], cr: &[u8]) -> Vec<u8> {
 }
 
 pub fn rgb555_to_rgb888(v: u16) -> (u8, u8, u8) {
-    let r = ((v >> 0) & 0x1F) as u8;
+    let r = (v & 0x1F) as u8;
     let g = ((v >> 5) & 0x1F) as u8;
     let b = ((v >> 10) & 0x1F) as u8;
     (
