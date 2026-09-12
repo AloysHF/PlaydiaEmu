@@ -54,4 +54,4 @@ Mode 2 sectors:
 F1 fragments accumulate into a packet starting `00 80 04` (quant scale +
 qtables). Decoder is a proprietary MPEG-1-like DCT path (192×144 4:2:0
 centered in 320×240 RGB555). AC tables are still being locked against real
-hardware references — see `docs/PROJECT-STATUS.md`.
+hardware references.

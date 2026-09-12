@@ -13,7 +13,6 @@ Research-grade scaffold with:
 - Standalone CLI and libretro shell
 
 Retail boot requires a user-supplied 512 KiB BIOS EPROM at `0xE0000000`.
-See `docs/PROJECT-STATUS.md` for the evidence matrix and blockers.
 
 ## Build
 

@@ -7,6 +7,9 @@ tmp/**
 !tmp/.gitkeep
 !tmp/README.md
 
+# Local agent instructions
+CLAUDE.md
+
 # OS
 .DS_Store
 Thumbs.db
