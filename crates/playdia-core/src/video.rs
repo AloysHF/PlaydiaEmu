@@ -49,17 +49,19 @@ impl Default for CodecParams {
         Self {
             width: ENC_W,
             height: ENC_H,
-            bs_offset: 39,
+            // After 00 80 24 start-code (WizzardSK: body ~byte 40-44).
+            bs_offset: 40,
             dc_mode_accum: true,
             dc_scale: 8,
-            ac_count: 63,
+            ac_count: 10,
             ac_dequant: 0,
-            use_eob: true,
+            use_eob: false,
             level_shift: 0,
             chroma_420: true,
             mb_interleaved: true,
             scan_order: 0,
-            lsb_first: true,
+            // WizzardSK documents MSB-first modified MPEG-1 DC VLC.
+            lsb_first: false,
         }
     }
 }
