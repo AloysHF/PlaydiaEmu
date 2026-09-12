@@ -2,6 +2,7 @@
 //!
 //! Host I/O (windows, audio devices, path pickers) lives outside this crate.
 
+pub mod ac_tables;
 pub mod audio;
 pub mod bus;
 pub mod cd;
