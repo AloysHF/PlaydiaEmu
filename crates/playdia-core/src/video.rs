@@ -1,12 +1,11 @@
-//! Playdia CDXA video: F1 assembly + proprietary still-frame decode (HLE).
+//! Playdia CDXA video decoder (HLE).
 //!
-//! Confirmed on real Redump titles:
-//! - 6× F1 Form1 sectors (2047 B payload each) + F2 end → 12282-byte packet
-//! - Header: `00 80 04`, QS, 16-byte qtable ×2, `00 80 24`, then bitstream
-//! - Encoded image is a small 4:2:0 DCT frame centered on 320×240 RGB555
+//! Packet format confirmed on Redump titles:
+//! `00 80 04 | QS | qtable[16]×2 | 00 80 24 | 00 | dcY | dcCb | dcCr | flags | bitstream`
 //!
-//! Decoder uses MPEG-1-like DC VLC + integer IDCT. AC tables are best-effort;
-//! DC-only path still yields structured (non-blank) frames for regression.
+//! Default codec profile follows reverse-engineered defaults that produce
+//! structured output on real discs (192×144 4:2:0, MB-interleaved, fixed
+//! AC count, init+diff DC, MPEG-1-like size VLC).
 
 use crate::cd::XaPacket;
 
@@ -14,7 +13,6 @@ pub const WIDTH: usize = 320;
 pub const HEIGHT: usize = 240;
 pub const ENC_W: usize = 192;
 pub const ENC_H: usize = 144;
-pub const PACKET_MIN: usize = 12282;
 const ACC_CAP: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +20,41 @@ pub enum FrameKind {
     None,
     Still,
     Progressive,
+}
+
+/// Tunable decode profile (defaults = reverse-engineered working set).
+#[derive(Debug, Clone, Copy)]
+pub struct CodecParams {
+    pub width: usize,
+    pub height: usize,
+    pub bs_offset: usize,
+    pub dc_mode_accum: bool,
+    pub dc_scale: i32,
+    pub ac_count: usize,
+    /// 0 = raw AC (no dequant), 1 = q*qscale/8
+    pub ac_dequant: u8,
+    pub use_eob: bool,
+    pub level_shift: i32,
+    pub chroma_420: bool,
+    pub mb_interleaved: bool,
+}
+
+impl Default for CodecParams {
+    fn default() -> Self {
+        Self {
+            width: ENC_W,
+            height: ENC_H,
+            bs_offset: 44,
+            dc_mode_accum: false,
+            dc_scale: 8,
+            ac_count: 10,
+            ac_dequant: 0,
+            use_eob: false,
+            level_shift: 0,
+            chroma_420: true,
+            mb_interleaved: true,
+        }
+    }
 }
 
 const ZIGZAG: [usize; 64] = [
@@ -53,8 +86,8 @@ pub struct VideoDecoder {
     pub acc_sectors: u32,
     pub last_qs: u8,
     pub last_qtable: [u8; 16],
-    /// DC-only reconstruction (block averages) — always produces structure.
-    pub dc_only: bool,
+    pub params: CodecParams,
+    pub last_blocks: usize,
 }
 
 impl Default for VideoDecoder {
@@ -76,14 +109,15 @@ impl VideoDecoder {
             acc_sectors: 0,
             last_qs: 0,
             last_qtable: [0; 16],
-            dc_only: true,
+            params: CodecParams::default(),
+            last_blocks: 0,
         }
     }
 
     pub fn reset(&mut self) {
-        let dc_only = self.dc_only;
+        let params = self.params;
         *self = Self {
-            dc_only,
+            params,
             ..Self::new()
         };
     }
@@ -98,11 +132,6 @@ impl VideoDecoder {
                         self.acc.extend_from_slice(chunk);
                         self.acc_sectors += 1;
                     }
-                } else {
-                    if self.acc.len() + data.len() <= ACC_CAP {
-                        self.acc.extend_from_slice(data);
-                        self.acc_sectors += 1;
-                    }
                 }
             }
             XaPacket::FrameEnd { .. } => {
@@ -110,7 +139,7 @@ impl VideoDecoder {
                     && self.acc[0] == 0x00
                     && self.acc[1] == 0x80
                     && self.acc[2] == 0x04;
-                if starts && self.acc.len() >= 40 {
+                if starts && self.acc.len() >= 44 {
                     self.decode_accumulated();
                 } else if !self.acc.is_empty() {
                     self.frames_failed += 1;
@@ -131,11 +160,12 @@ impl VideoDecoder {
     fn decode_accumulated(&mut self) {
         let buf = std::mem::take(&mut self.acc);
         self.last_packet_len = buf.len();
-        match decode_packet(&buf, self.dc_only) {
-            Some(rgb555) => {
+        match decode_packet(&buf, self.params) {
+            Some((rgb555, blocks)) => {
                 self.blit_encoded(&rgb555);
                 self.frames_decoded += 1;
                 self.last_kind = FrameKind::Progressive;
+                self.last_blocks = blocks;
                 if buf.len() > 3 {
                     self.last_qs = buf[3];
                 }
@@ -171,7 +201,6 @@ impl VideoDecoder {
         out
     }
 
-    /// Write binary PPM (RGB8) for visual inspection.
     pub fn dump_ppm(&self, path: &std::path::Path) -> std::io::Result<()> {
         use std::io::Write;
         let mut f = std::fs::File::create(path)?;
@@ -220,7 +249,8 @@ impl<'a> Bs<'a> {
         v
     }
 
-    fn read_dc_diff(&mut self) -> Option<i32> {
+    /// MPEG-1 luminance DC size VLC with Playdia size-7/8 6-bit forms.
+    fn read_vlc(&mut self) -> Option<i32> {
         if self.pos >= self.bits {
             return None;
         }
@@ -259,7 +289,7 @@ impl<'a> Bs<'a> {
     }
 }
 
-fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64]) {
+fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64], level_shift: i32) {
     let mut matrix = [[0i32; 8]; 8];
     for i in 0..64 {
         let z = ZIGZAG[i];
@@ -281,7 +311,7 @@ fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64]) {
             for k in 0..8 {
                 sum += temp[k][j] * COS[k][i];
             }
-            out[i * 8 + j] = ((sum + 2048) >> 12).clamp(0, 255) as u8;
+            out[i * 8 + j] = (((sum + 2048) >> 12) + level_shift).clamp(0, 255) as u8;
         }
     }
 }
@@ -293,9 +323,9 @@ fn rgb888_to_555(r: u8, g: u8, b: u8) -> u16 {
     r5 | (g5 << 5) | (b5 << 10)
 }
 
-/// Decode assembled packet → ENC_W×ENC_H RGB555 LE.
-pub fn decode_packet(buf: &[u8], dc_only: bool) -> Option<Vec<u8>> {
-    if buf.len() < 40 {
+/// Decode packet → (ENC_W×ENC_H RGB555 LE, blocks decoded).
+pub fn decode_packet(buf: &[u8], p: CodecParams) -> Option<(Vec<u8>, usize)> {
+    if buf.len() < 44 {
         return None;
     }
     if !(buf[0] == 0x00 && buf[1] == 0x80 && buf[2] == 0x04) {
@@ -304,77 +334,124 @@ pub fn decode_packet(buf: &[u8], dc_only: bool) -> Option<Vec<u8>> {
     let qscale = buf[3].max(1) as i32;
     let mut qtable = [0u8; 16];
     qtable.copy_from_slice(&buf[4..20]);
-    // Bitstream: strip trailing 0xFF padding, start at byte 40+ (after optional DC inits).
-    let mut data_end = buf.len();
-    while data_end > 48 && buf[data_end - 1] == 0xFF {
-        data_end -= 1;
+    let mut qm = [[0i32; 8]; 8];
+    for i in 0..8 {
+        for j in 0..8 {
+            qm[i][j] = qtable[(i / 2) * 4 + (j / 2)] as i32;
+        }
     }
-    // Observed: bytes 40-42 look like DC inits on some frames; bitstream often starts ~43.
-    let bso = if data_end > 48 { 43 } else { 40 };
-    if bso >= data_end {
+
+    let dc_init = [
+        buf[40] as i32,
+        buf[41] as i32,
+        buf[42] as i32,
+    ];
+    let bso = p.bs_offset.min(buf.len());
+    let mut end = buf.len();
+    while end > bso && buf[end - 1] == 0xFF {
+        end -= 1;
+    }
+    if end <= bso {
         return None;
     }
-    let mut bs = Bs::new(&buf[bso..data_end]);
+    let mut bs = Bs::new(&buf[bso..end]);
 
-    let mw = ENC_W / 16;
-    let mh = ENC_H / 16;
-    let mut y_plane = vec![128u8; ENC_W * ENC_H];
+    let mbpx = 16usize;
+    let mw = p.width / mbpx;
+    let mh = p.height / mbpx;
+    let bpm = if p.chroma_420 { 6 } else { 4 };
+    if mw == 0 || mh == 0 {
+        return None;
+    }
+
+    let mut y_plane = vec![(128 + p.level_shift).clamp(0, 255) as u8; ENC_W * ENC_H];
     let mut cb_plane = vec![128u8; (ENC_W / 2) * (ENC_H / 2)];
     let mut cr_plane = vec![128u8; (ENC_W / 2) * (ENC_H / 2)];
-    let mut dc_pred = [90i32, 128, 128];
+    let mut dc_pred = dc_init;
     let mut blocks_ok = 0usize;
 
-    for mb_y in 0..mh {
+    'mb: for mb_y in 0..mh {
         for mb_x in 0..mw {
-            for bi in 0..6 {
-                let Some(diff) = bs.read_dc_diff() else {
-                    if blocks_ok == 0 {
-                        return None;
+            for bl in 0..bpm {
+                let comp = if !p.mb_interleaved {
+                    // plane mode handled roughly as Y then chroma by index
+                    if blocks_ok < mw * mh * 4 {
+                        0
+                    } else if blocks_ok < mw * mh * 5 {
+                        1
+                    } else {
+                        2
                     }
-                    return Some(compose(&y_plane, &cb_plane, &cr_plane));
-                };
-                let comp = if bi < 4 {
+                } else if bl < 4 {
                     0
-                } else if bi == 4 {
+                } else if bl == 4 {
                     1
                 } else {
                     2
                 };
-                dc_pred[comp] = (dc_pred[comp] + diff).clamp(0, 255);
+
+                let Some(diff) = bs.read_vlc() else {
+                    if blocks_ok == 0 {
+                        return None;
+                    }
+                    break 'mb;
+                };
+                let dc_val = if p.dc_mode_accum {
+                    dc_pred[comp] = (dc_pred[comp] + diff).clamp(0, 255);
+                    dc_pred[comp]
+                } else {
+                    (dc_init[comp] + diff).clamp(0, 255)
+                };
                 let mut coeff = [0i32; 64];
-                coeff[0] = dc_pred[comp] * 8;
-                if !dc_only {
-                    for zi in 1..64 {
-                        let Some(d) = bs.read_dc_diff() else {
+                coeff[0] = dc_val * p.dc_scale;
+
+                if p.use_eob {
+                    for k in 1..64 {
+                        let Some(v) = bs.read_vlc() else {
                             break;
                         };
-                        if d == 0 {
+                        if v == 0 {
                             break;
                         }
-                        let pos = ZIGZAG[zi];
-                        let q = qtable[((pos / 4) + (pos % 4)) % 16].max(1) as i32;
-                        coeff[zi] = d * q * qscale / 8;
+                        let mut val = v;
+                        if p.ac_dequant == 1 {
+                            val = val * qm[ZIGZAG[k] / 8][ZIGZAG[k] % 8] * qscale / 8;
+                        }
+                        coeff[k] = val;
+                    }
+                } else {
+                    for k in 1..=p.ac_count.min(63) {
+                        let Some(v) = bs.read_vlc() else {
+                            break;
+                        };
+                        let mut val = v;
+                        if p.ac_dequant == 1 {
+                            val = val * qm[ZIGZAG[k] / 8][ZIGZAG[k] % 8] * qscale / 8;
+                        }
+                        coeff[k] = val;
                     }
                 }
+
                 let mut blk = [0u8; 64];
-                idct_block(&coeff, &mut blk);
+                idct_block(&coeff, &mut blk, p.level_shift);
                 blit_block(
                     &mut y_plane,
                     &mut cb_plane,
                     &mut cr_plane,
                     mb_x,
                     mb_y,
-                    bi,
+                    bl,
                     &blk,
                 );
                 blocks_ok += 1;
             }
         }
     }
+
     if blocks_ok == 0 {
         return None;
     }
-    Some(compose(&y_plane, &cb_plane, &cr_plane))
+    Some((compose(&y_plane, &cb_plane, &cr_plane), blocks_ok))
 }
 
 fn blit_block(

@@ -125,7 +125,10 @@ fn main() -> Result<()> {
             full_decode,
         } => {
             let mut p = DiscPlayer::new();
-            p.video.dc_only = !full_decode;
+            if full_decode {
+                p.video.params.ac_dequant = 1;
+                p.video.params.use_eob = true;
+            }
             p.load_path(&disc).context("load disc")?;
             if let Some(dir) = dump_every.map(|_| dump_dir.clone()) {
                 std::fs::create_dir_all(&dir).ok();

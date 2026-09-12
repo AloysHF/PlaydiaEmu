@@ -72,7 +72,10 @@ fn main() -> Result<()> {
 
     log::info!("Loading {}", cli.disc.display());
     let mut player = DiscPlayer::new();
-    player.video.dc_only = !cli.full_decode;
+    if cli.full_decode {
+        player.video.params.ac_dequant = 1;
+        player.video.params.use_eob = true;
+    }
     player
         .load_path(&cli.disc)
         .context("failed to load disc")?;
