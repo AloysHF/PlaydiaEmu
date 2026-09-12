@@ -109,6 +109,8 @@ pub struct VideoDecoder {
     pub last_qtable: [u8; 16],
     pub params: CodecParams,
     pub last_blocks: usize,
+    /// Cache: packet CRC → RGB555 encoded image (stable stills).
+    cache: std::collections::HashMap<u32, (Vec<u8>, usize)>,
 }
 
 impl Default for VideoDecoder {
@@ -132,6 +134,7 @@ impl VideoDecoder {
             last_qtable: [0; 16],
             params: CodecParams::default(),
             last_blocks: 0,
+            cache: std::collections::HashMap::new(),
         }
     }
 
@@ -181,8 +184,18 @@ impl VideoDecoder {
     fn decode_accumulated(&mut self) {
         let buf = std::mem::take(&mut self.acc);
         self.last_packet_len = buf.len();
+        let crc = crate::state::crc32(&buf);
+        if let Some((rgb, blocks)) = self.cache.get(&crc).cloned() {
+            self.blit_encoded(&rgb);
+            self.frames_decoded += 1;
+            self.last_kind = FrameKind::Still;
+            self.last_blocks = blocks;
+            self.acc = Vec::new();
+            return;
+        }
         match decode_packet(&buf, self.params) {
             Some((rgb555, blocks)) => {
+                self.cache.insert(crc, (rgb555.clone(), blocks));
                 self.blit_encoded(&rgb555);
                 self.frames_decoded += 1;
                 self.last_kind = FrameKind::Progressive;

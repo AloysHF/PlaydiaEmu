@@ -127,7 +127,7 @@ fn main() -> Result<()> {
             let mut p = DiscPlayer::new();
             if full_decode {
                 p.video.params.ac_dequant = 1;
-                p.video.params.use_eob = true;
+                p.video.params.use_eob = false;
             }
             p.load_path(&disc).context("load disc")?;
             if let Some(dir) = dump_every.map(|_| dump_dir.clone()) {

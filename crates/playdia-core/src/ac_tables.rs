@@ -1,0 +1,50 @@
+//! MPEG-1-like intra AC tables + decoder helpers.
+
+/// MPEG-1 luminance AC VLC (code, bits) → (run, level)
+/// Returns None if not a table entry (use escape).
+pub fn mpeg1_ac_luma(code: u32, bits: u32) -> Option<(u32, i32)> {
+    // Subset of ISO 11172-2 Table B.14 (luma DC/AC style used by still codecs).
+    // (bits, code) → (run, abs_level); sign follows.
+    #[inline]
+    fn t(bits: u32, code: u32) -> Option<(u32, i32)> {
+        Some((bits, code))
+    }
+    let _ = t;
+    match (bits, code) {
+        (2, 0b10) => Some((0, 0)),          // EOB
+        (3, 0b001) => Some((0, 1)),          // 0,1
+        (4, 0b0111) => Some((0, 2)),         // 0,2
+        (5, 0b11010) => Some((0, 3)),        // 0,3
+        (6, 0b111011) => Some((0, 4)),       // 0,4
+        (7, 0b1111100) => Some((0, 5)),
+        (7, 0b1111101) => Some((0, 6)),
+        (8, 0b11111100) => Some((0, 7)),
+        (8, 0b11111101) => Some((0, 8)),
+        (9, 0b111111100) => Some((0, 9)),
+        (10, 0b1111111100) => Some((0, 10)),
+        (4, 0b0100) => Some((1, 1)),
+        (6, 0b011110) => Some((1, 2)),
+        (7, 0b1111000) => Some((1, 3)),
+        (8, 0b11111110) => Some((1, 4)),
+        (9, 0b1111111101) => Some((1, 5)),
+        (5, 0b01101) => Some((2, 1)),
+        (7, 0b1111001) => Some((2, 2)),
+        (8, 0b11111111) => Some((2, 3)),
+        (6, 0b010111) => Some((3, 1)),
+        (8, 0b11111010) => Some((3, 2)),
+        (7, 0b011001) => Some((4, 1)),
+        (8, 0b11111011) => Some((4, 2)),
+        (7, 0b011000) => Some((5, 1)),
+        (8, 0b11110100) => Some((6, 1)),
+        (8, 0b11110101) => Some((7, 1)),
+        (8, 0b11110110) => Some((8, 1)),
+        (8, 0b11110111) => Some((9, 1)),
+        (9, 0b111111000) => Some((10, 1)),
+        (9, 0b111111001) => Some((11, 1)),
+        (9, 0b111111010) => Some((12, 1)),
+        (9, 0b111111011) => Some((13, 1)),
+        (10, 0b1111111010) => Some((14, 1)),
+        (10, 0b1111111011) => Some((15, 1)),
+        _ => None,
+    }
+}
