@@ -96,7 +96,7 @@ impl Machine {
         let disc = DiscImage::from_bytes(bytes)?;
         self.identity.disc_crc = disc.crc;
         self.identity.disc_sectors = disc.total_sectors;
-        self.demux = if disc.raw {
+        self.demux = if disc.single.as_ref().map(|s| s.raw).unwrap_or(true) {
             // Lightweight scan only counts; full parse per frame.
             XaDemux::new()
         } else {

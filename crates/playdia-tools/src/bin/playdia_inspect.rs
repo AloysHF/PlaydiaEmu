@@ -1,65 +1,59 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use playdia_core::{content::DiscImage, Machine, MachineConfig};
+use playdia_core::content::DiscImage;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "playdia-inspect", about = "Inspect Playdia CDS-XA images")]
+#[command(
+    name = "playdia-inspect",
+    about = "Inspect Playdia CDS-XA CUE/BIN images"
+)]
 struct Cli {
     disc: PathBuf,
-    /// Print first N video/audio sector LBAs.
-    #[arg(long, default_value_t = 8)]
-    sample: usize,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let disc = DiscImage::from_path(&cli.disc).context("read disc")?;
-    println!("size_bytes={}", disc.data.len());
-    println!("raw_mode={}", disc.raw);
+    println!("kind={:?}", disc.kind);
     println!("total_sectors={}", disc.total_sectors);
     println!("crc32={:08x}", disc.crc);
-
-    let mut m = Machine::new(MachineConfig::default());
-    m.load_disc_path(&cli.disc)?;
-    if let Some(stats) = m.disc_stats() {
-        println!("video_sectors={}", stats.video_sectors);
-        println!("audio_sectors={}", stats.audio_sectors);
-        println!("other_sectors={}", stats.other_sectors);
-        println!("last_video_lba={:?}", stats.last_video_lba);
-        println!("last_audio_lba={:?}", stats.last_audio_lba);
+    for t in &disc.tracks {
+        println!(
+            "track{} sectors={} mode2={} bytes={}",
+            t.number,
+            t.sectors,
+            t.mode2,
+            t.data.len()
+        );
     }
-
-    // Sample subheaders
-    let mut shown_v = 0;
-    let mut shown_a = 0;
-    for lba in 0..disc.total_sectors {
-        let Some(sec) = disc.read_sector(lba) else {
-            continue;
-        };
-        if sec.is_video() && shown_v < cli.sample {
-            println!(
-                "video lba={lba} ch={} submode=0x{:02x} coding=0x{:02x} bytes={}",
-                sec.channel_id,
-                sec.submode,
-                sec.coding,
-                sec.data.len()
-            );
-            shown_v += 1;
+    if let Some(t) = disc.stream_track() {
+        let mut f1 = 0u32;
+        let mut f2 = 0u32;
+        let mut f3 = 0u32;
+        let mut aud = 0u32;
+        for i in 0..t.sectors.min(5000) {
+            let o = i as usize * 2352;
+            if o + 25 >= t.data.len() {
+                break;
+            }
+            let sm = t.data[o + 18];
+            let mk = t.data[o + 24];
+            if sm & 0x04 != 0 {
+                aud += 1;
+            } else if sm & 0x08 != 0 {
+                match mk {
+                    0xF1 => f1 += 1,
+                    0xF2 => f2 += 1,
+                    0xF3 => f3 += 1,
+                    _ => {}
+                }
+            }
         }
-        if sec.is_audio() && shown_a < cli.sample {
-            println!(
-                "audio lba={lba} ch={} submode=0x{:02x} coding=0x{:02x} bytes={}",
-                sec.channel_id,
-                sec.submode,
-                sec.coding,
-                sec.data.len()
-            );
-            shown_a += 1;
-        }
-        if shown_v >= cli.sample && shown_a >= cli.sample {
-            break;
-        }
+        println!(
+            "stream_track={} f1={} f2={} f3={} audio={}",
+            t.number, f1, f2, f3, aud
+        );
     }
     Ok(())
 }

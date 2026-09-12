@@ -10,14 +10,16 @@ pub mod content;
 pub mod diagnostics;
 pub mod input;
 pub mod machine;
+pub mod player;
 pub mod sh1;
 pub mod state;
 pub mod video;
 
-pub use content::{DiscImage, LoadError};
+pub use content::{DiscImage, DiscKind, LoadError};
 pub use diagnostics::Diagnostics;
 pub use input::{InputButtons, InputState};
 pub use machine::{Machine, MachineConfig, RunStop};
+pub use player::{DiscPlayer, PlayerStop};
 pub use state::{SaveStateError, STATE_MAGIC, STATE_VERSION};
 
 /// Native framebuffer geometry produced by the core.

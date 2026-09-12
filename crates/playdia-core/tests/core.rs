@@ -25,12 +25,12 @@ fn disc_size_rejects_odd() {
 fn disc_accepts_raw_and_cooked() {
     let raw = vec![0u8; RAW_SECTOR * 4];
     let d = DiscImage::from_bytes(raw).unwrap();
-    assert!(d.raw);
+    assert_eq!(d.kind, playdia_core::DiscKind::SingleRaw);
     assert_eq!(d.total_sectors, 4);
 
     let cooked = vec![0u8; 2048 * 3];
     let d = DiscImage::from_bytes(cooked).unwrap();
-    assert!(!d.raw);
+    assert_eq!(d.kind, playdia_core::DiscKind::SingleCooked);
     assert_eq!(d.total_sectors, 3);
 }
 

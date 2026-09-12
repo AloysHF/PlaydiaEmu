@@ -2,12 +2,13 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use playdia_core::{
     machine::{Machine, MachineConfig, RunStop},
-    InputButtons, FB_HEIGHT, FB_WIDTH,
+    player::{DiscPlayer, PlayerStop},
+    DiscKind, InputButtons, FB_HEIGHT, FB_WIDTH,
 };
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "playdia", about = "Playdia emulator (standalone/headless)")]
+#[command(name = "playdia", about = "Playdia emulator (HLE player + LLE shell)")]
 struct Cli {
     #[command(subcommand)]
     cmd: Cmd,
@@ -15,32 +16,42 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Inspect a disc image (sector counts, XA stats).
-    Inspect {
-        /// Path to raw/cooked CDS-XA image.
+    /// Inspect a CUE/BIN or raw disc image.
+    Inspect { disc: PathBuf },
+    /// HLE disc player: stream Track 2 video/audio without BIOS.
+    Play {
+        /// Path to .cue (preferred) or raw .bin/.iso
         disc: PathBuf,
+        #[arg(long, default_value_t = 180)]
+        frames: u32,
+        /// Dump final framebuffer as PPM after the run.
+        #[arg(long)]
+        dump_ppm: Option<PathBuf>,
+        /// Dump every Nth decoded frame as PPM into this directory.
+        #[arg(long)]
+        dump_every: Option<u32>,
+        /// Dump directory for periodic frames (with --dump-every).
+        #[arg(long, default_value = "tmp/out")]
+        dump_dir: PathBuf,
+        /// Use AC decode (experimental). Default is DC-only reconstruction.
+        #[arg(long)]
+        full_decode: bool,
     },
-    /// Run headless for N frames and print diagnostics / CRCs.
+    /// LLE-oriented headless (SH-1 + bus). Prefer `play` for disc playback.
     Headless {
         disc: PathBuf,
-        /// Optional 512KiB BIOS EPROM dump.
         #[arg(long)]
         bios: Option<PathBuf>,
         #[arg(long, default_value_t = 60)]
         frames: u32,
-        /// Allow missing BIOS (empty EPROM + RAM idle loop).
         #[arg(long)]
         allow_placeholder_bios: bool,
-        /// Force audio test tone instead of silent XA ADPCM placeholder.
         #[arg(long)]
         audio_test_tone: bool,
-        /// Write save-state after run.
         #[arg(long)]
         save_state: Option<PathBuf>,
-        /// Load save-state before run.
         #[arg(long)]
         load_state: Option<PathBuf>,
-        /// Dump final framebuffer as raw RGB555.
         #[arg(long)]
         dump_fb: Option<PathBuf>,
     },
@@ -51,19 +62,110 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.cmd {
         Cmd::Inspect { disc } => {
-            let m = Machine::new(MachineConfig::default());
-            let mut m = m;
-            m.load_disc_path(&disc).context("load disc")?;
-            println!(
-                "sectors={} raw={}",
-                m.disc.as_ref().unwrap().total_sectors,
-                m.disc.as_ref().unwrap().raw
-            );
-            if let Some(stats) = m.disc_stats() {
+            let d = playdia_core::DiscImage::from_path(&disc).context("load disc")?;
+            println!("kind={:?}", d.kind);
+            println!("total_sectors={}", d.total_sectors);
+            println!("crc32={:08x}", d.crc);
+            for t in &d.tracks {
                 println!(
-                    "video_sectors={} audio_sectors={} other_sectors={}",
-                    stats.video_sectors, stats.audio_sectors, stats.other_sectors
+                    "track{} sectors={} mode2={} bytes={}",
+                    t.number,
+                    t.sectors,
+                    t.mode2,
+                    t.data.len()
                 );
+            }
+            // Sample first track sectors for ISO + stream track markers.
+            if let Some(t) = d.data_track() {
+                if t.sectors > 16 {
+                    let sec = &t.data[16 * 2352..17 * 2352];
+                    let sig = &sec[25..30];
+                    println!(
+                        "pvd_sig={:?} volume={:?}",
+                        String::from_utf8_lossy(sig),
+                        String::from_utf8_lossy(&sec[40..72])
+                    );
+                }
+            }
+            if let Some(t) = d.stream_track() {
+                let mut f1 = 0u32;
+                let mut f2 = 0u32;
+                let mut f3 = 0u32;
+                let mut aud = 0u32;
+                for i in 0..t.sectors.min(8000) {
+                    let o = i as usize * 2352;
+                    if o + 25 >= t.data.len() {
+                        break;
+                    }
+                    let sm = t.data[o + 18];
+                    let mk = t.data[o + 24];
+                    if sm & 0x04 != 0 {
+                        aud += 1;
+                    } else if sm & 0x08 != 0 {
+                        match mk {
+                            0xF1 => f1 += 1,
+                            0xF2 => f2 += 1,
+                            0xF3 => f3 += 1,
+                            _ => {}
+                        }
+                    }
+                }
+                println!(
+                    "stream_track={} f1={} f2={} f3={} audio={}",
+                    t.number, f1, f2, f3, aud
+                );
+            }
+        }
+        Cmd::Play {
+            disc,
+            frames,
+            dump_ppm,
+            dump_every,
+            dump_dir,
+            full_decode,
+        } => {
+            let mut p = DiscPlayer::new();
+            p.video.dc_only = !full_decode;
+            p.load_path(&disc).context("load disc")?;
+            if let Some(dir) = dump_every.map(|_| dump_dir.clone()) {
+                std::fs::create_dir_all(&dir).ok();
+            }
+            let mut dumped = 0u32;
+            for i in 0..frames {
+                let stop = p.run_frame();
+                if let Some(n) = dump_every {
+                    if n > 0
+                        && p.video.frames_decoded > 0
+                        && p.video.frames_decoded.is_multiple_of(n as u64)
+                    {
+                        let path = dump_dir.join(format!("frame_{:05}.ppm", dumped));
+                        p.video.dump_ppm(&path)?;
+                        println!("wrote {}", path.display());
+                        dumped += 1;
+                    }
+                }
+                if stop != PlayerStop::Ok {
+                    log::warn!("stop={stop:?} at host_frame {}", p.frame);
+                    break;
+                }
+                if i % 30 == 0 {
+                    println!("host_frame={} {}", i, p.stats_line());
+                }
+            }
+            if let Some(path) = dump_ppm {
+                p.video.dump_ppm(&path)?;
+                println!("wrote {}", path.display());
+            }
+            let audio = p.drain_audio();
+            println!(
+                "DONE {} audio_samples={} track_idx={} interactive={}",
+                p.stats_line(),
+                audio.len(),
+                p.track_index,
+                p.interactive.len()
+            );
+            if p.video.frames_decoded == 0 {
+                bail!("no video frames decoded (failed={})", p.video.frames_failed);
             }
         }
         Cmd::Headless {
@@ -116,10 +218,6 @@ fn main() -> Result<()> {
                 m.cpu.pc,
                 m.cpu.stopped
             );
-            println!(
-                "diag unmapped_r={} unmapped_w={} unknown_op={} notes={:?}",
-                m.diag.unmapped_reads, m.diag.unmapped_writes, m.diag.unknown_opcodes, m.diag.notes
-            );
             if let Some(path) = dump_fb {
                 let bytes: Vec<u8> = m
                     .framebuffer()
@@ -131,7 +229,12 @@ fn main() -> Result<()> {
             if let Some(path) = save_state {
                 std::fs::write(path, m.save_state())?;
             }
-            let _ = (FB_WIDTH, FB_HEIGHT, InputButtons::default());
+            let _ = (
+                FB_WIDTH,
+                FB_HEIGHT,
+                InputButtons::default(),
+                DiscKind::SingleRaw,
+            );
         }
     }
     Ok(())

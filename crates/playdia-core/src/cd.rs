@@ -69,9 +69,17 @@ impl XaDemux {
         *self = Self::new();
     }
 
+    pub fn note_interactive(&mut self) {
+        self.interactive_cmds += 1;
+    }
+
     pub fn push(&mut self, sector: &Sector) -> XaPacket {
-        if sector.is_end() {
-            self.end_flag = true;
+        // Ignore EOR on lead-in/TOC (file_id 0) and before any stream data.
+        if sector.is_end() && (sector.file_id != 0 || self.video_sectors + self.audio_sectors > 0) {
+            // Only honor EOR once streaming file content has started.
+            if sector.file_id != 0 {
+                self.end_flag = true;
+            }
         }
         match route_sector(sector) {
             XaRoute::Audio => {
@@ -165,7 +173,24 @@ pub enum XaPacket {
 /// Scan a disc for XA file content statistics.
 pub fn scan_xa(disc: &DiscImage) -> XaDemux {
     let mut demux = XaDemux::new();
-    if !disc.raw {
+    if disc.single.is_none() {
+        // Multi-track: scan stream track only.
+        if let Some(t) = disc.stream_track() {
+            for i in 0..t.sectors {
+                let o = i as usize * RAW_SECTOR;
+                if o + RAW_SECTOR > t.data.len() {
+                    break;
+                }
+                let raw = &t.data[o..o + RAW_SECTOR];
+                if let Some(mut sec) = crate::content::parse_raw_sector(raw) {
+                    sec.lba = i;
+                    demux.push(&sec);
+                }
+            }
+        }
+        return demux;
+    }
+    if disc.single.as_ref().map(|s| !s.raw).unwrap_or(true) {
         return demux;
     }
     for lba in 0..disc.total_sectors {
@@ -179,7 +204,7 @@ pub fn scan_xa(disc: &DiscImage) -> XaDemux {
 }
 
 pub fn sector_bytes(disc: &DiscImage) -> usize {
-    if disc.raw {
+    if disc.single.as_ref().map(|s| s.raw).unwrap_or(true) {
         RAW_SECTOR
     } else {
         COOKED_SECTOR

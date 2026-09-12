@@ -1,21 +1,20 @@
 # Game compatibility
 
-| Title / content | Disc load | SH-1 boot | CDXA video | CDXA audio | Notes |
-|-----------------|-----------|-----------|------------|------------|-------|
-| Synthetic F1/F2 fixtures | 已验证 | n/a (placeholder BIOS) | 部分（累积+解码入口） | 部分（XA ADPCM 结构） | unit tests |
-| Real title + user BIOS | 未验证 | 未验证 | 未验证 | 未验证 | needs BIOS dump + ISO |
-| Real title, no BIOS (stream only) | 部分 | 无 | 依赖解码正确性 | 依赖 ADPCM 锁定 | streaming path only |
+HLE player (no BIOS). Status from private Redump samples under `tmp/iso/`.
+
+| Title | Load CUE | Stream track | Video frames | Audio PCM | Notes |
+|-------|----------|--------------|--------------|-----------|-------|
+| Mari-nee no Heya | 已验证 | 已验证 (Track2) | 已验证 (96 host / 96 decoded) | 已验证 (~846k samples) | DC-only image |
+| Playdia Sample Soft | 已验证 | 已验证 | 已验证 | 已验证 | DC-only image |
+| Other Redump titles | 未验证 | 结构同 | 未验证 | 未验证 | Expected same CUE layout |
 
 Legend: 已验证 / 部分 / 未验证
 
-## How to update this matrix
-
-1. Place a legal BIOS dump at `tmp/bios/playdia_bios.bin` (private).
-2. Place a disc image at `tmp/iso/*.iso` (private).
-3. Run:
+## How to update
 
 ```powershell
-cargo run -p playdia -- headless path\to\disc.iso --bios path\to\bios.bin --frames 180
+cargo run --release -p playdia -- inspect "tmp/iso/<title>/<title>.cue"
+cargo run --release -p playdia -- play "tmp/iso/<title>/<title>.cue" --frames 120 --dump-ppm tmp/out/<title>.ppm
 ```
 
-4. Record frame CRC, CPU PC, and diagnostics. Do not commit ROMs/BIOS/ISOs.
+Do not commit discs, BIOS, or PPM dumps.

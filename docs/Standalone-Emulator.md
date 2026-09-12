@@ -1,48 +1,39 @@
 # Standalone emulator
 
-## Build
+## HLE disc player (recommended, no BIOS)
 
 ```powershell
-cargo build --release -p playdia
+cargo run --release -p playdia -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
 ```
-
-## Inspect a disc
-
-```powershell
-cargo run --release -p playdia -- inspect path\to\disc.iso
-# or
-cargo run --release -p playdia-tools -- path\to\disc.iso
-```
-
-## Headless run
-
-```powershell
-cargo run --release -p playdia -- headless path\to\disc.iso `
-  --bios path\to\playdia_bios.bin `
-  --frames 180
-```
-
-Without a BIOS dump (streaming experiments only):
-
-```powershell
-cargo run --release -p playdia -- headless path\to\disc.iso `
-  --allow-placeholder-bios --frames 60 --audio-test-tone
-```
-
-Options:
 
 | Flag | Meaning |
 |------|---------|
-| `--bios` | 512 KiB SH-1 EPROM at `0xE0000000` |
-| `--allow-placeholder-bios` | empty EPROM + RAM idle loop (tests) |
-| `--frames N` | stop after N video frames |
-| `--save-state PATH` | write save-state after run |
-| `--load-state PATH` | load save-state before run |
-| `--dump-fb PATH` | write 320×240 RGB555 LE framebuffer |
-| `--audio-test-tone` | ignore ADPCM, emit sine |
+| `--frames N` | Host frames to run (~8 stream sectors each) |
+| `--dump-ppm PATH` | Write final 320×240 PPM |
+| `--dump-every N --dump-dir DIR` | Periodic PPM dumps |
+| `--full-decode` | Experimental AC path (default is DC-only reconstruction) |
 
-## Windowed frontend
+Example (private research corpus):
 
-Not yet implemented in the standalone binary. The libretro core
-(`target/release/playdia_libretro.dll`) can be loaded by RetroArch-compatible
-frontends for interactive presentation.
+```powershell
+cargo run --release -p playdia -- play `
+  "tmp/iso/Mari-nee no Heya (Japan)/Mari-nee no Heya (Japan).cue" `
+  --frames 90 --dump-ppm tmp/out/mari.ppm
+```
+
+## Inspect
+
+```powershell
+cargo run --release -p playdia -- inspect path\to\game.cue
+cargo run --release -p playdia-tools -- path\to\game.cue
+```
+
+## LLE headless (optional)
+
+```powershell
+cargo run --release -p playdia -- headless path\to\disc.iso --bios bios.bin --frames 60
+```
+
+## Windowed UI
+
+Not yet implemented. libretro core builds for frontend integration.
