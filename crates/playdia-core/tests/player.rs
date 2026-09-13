@@ -1,4 +1,5 @@
 //! HLE player tests against synthetic MODE2 discs (no copyrighted content).
+mod common;
 
 use playdia_core::content::{DiscImage, Track};
 use playdia_core::player::{DiscPlayer, PlayerStop};
@@ -143,15 +144,20 @@ fn interactive_video_is_finished_and_presented_before_control() {
         let mut disc = interactive_disc(command);
         let raw = &mut disc.tracks[1].data;
         let f1 = &mut raw[24..2072];
-        f1.fill(0x55);
-        f1[0..5].copy_from_slice(&[0xF1, 0, 0x80, 4, 8]);
-        f1[5..37].fill(8);
-        f1[37..40].copy_from_slice(&[0, 0x80, 0x24]);
-        raw[2352 + 24 + 0x23..2352 + 2072].fill(0x55);
+        let picture = common::picture(|row, _, bits| {
+            if row < 2 {
+                common::escape(bits, 0, 0);
+            }
+            common::put(bits, 1, 2);
+        });
+        assert!(picture.len() > 2047 && picture.len() < 2047 + 2013);
+        f1[0] = 0xF1;
+        f1[1..].copy_from_slice(&picture[..2047]);
+        let tail = &mut raw[2352 + 24 + 0x23..2352 + 2072];
+        tail.fill(0xFF);
+        tail[..picture.len() - 2047].copy_from_slice(&picture[2047..]);
         let mut player = DiscPlayer::new();
         player.disc = Some(disc);
-        // Keep the synthetic preview small enough for one F1/F2 pair.
-        player.video.params.ac_count = 0;
         player.run_frame();
         assert_eq!(player.video.last_packet_len, 2047 + 2013);
         assert!(player.video.acc.is_empty());

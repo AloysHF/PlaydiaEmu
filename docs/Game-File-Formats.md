@@ -66,32 +66,38 @@ qtables), then F1 fragments, then F2 end.
 
 The picture header is 36 bytes: a 19-bit picture start code (0x400), 3-bit
 picture type, 2-bit quantizer shift, 8-bit factor and two 16-byte tables.
-MSB-first row markers follow: 14-bit 0x20 and a 5-bit row number (1..26).
+MSB-first row markers follow: 14-bit 0x20 and a 5-bit row number (1..27).
 Consequently bytes 38 and 39 span the row number and entropy data; the previous
 independent "segment code" and "flags" interpretation was incorrect.
 The inspector now labels byte 38 as raw data. It anchors the 14-bit 0x21
 terminator to final zero bits and FF padding, since that pattern also occurs
 inside entropy. Ordered row marker matches can still be ambiguous.
 
-## Video path (approximate)
+## Video path (recovered syntax)
 
-The display is 320×240 RGB555. The legacy preview uses a speculative 8×8 DCT
-path and does not implement the observed row format. An Asahi patent provides
-a much stronger 4×4 transform / 248×208 picture hypothesis, but its Huffman
-table and pixel reconstruction are not yet recovered; see
-[AK8000 research](AK8000-Research.md).
-The current default reads a fixed number of raw AC coefficients per block;
-`--full-decode` applies experimental quantization scaling. Pixel-accurate
-AK8000 VLC is still unsolved — treat
-frames as approximate unless fixture-proven against real hardware references.
-Some short packets contain long `0x55`/`0xAA` byte runs. The inspect tool can
-locate them with `--video-candidates`, but their codeword and pixel meanings
-remain unverified.
+The default decoder reads one 248×216 picture per assembled packet and centers
+it in the 320×240 RGB555 framebuffer. Each of 27 rows contains 31 macroblocks
+of four luma and two chroma 4×4 blocks. Entropy uses signed run/level VLCs,
+`01` EOB and a six-bit `001000` escape with four run bits and ten signed level
+bits. A block filled through coefficient 15 ends without another EOB.
+
+DC differences for Y1 refer to the preceding macroblock's Y1. Y2/Y3/Y4 refer
+to the current Y1; Cb and Cr have independent predictors. Predictors reset
+at each row. Reconstruction currently uses factor × quantizer / 64 and a
+fixed-point 4×4 inverse DCT, followed by YCbCr conversion. Separate luma and
+chroma tables are retained. Rare VLCs, nonlinear quantization, hardware
+transform rounding and analog color conversion remain research questions.
+See [AK8000 research](AK8000-Research.md) for evidence and limitations.
+
+The earlier 26-row assumption merged rows 26 and 27. Counting 186 literal
+EOBs was also insufficient because full blocks omit EOB. The native path
+validates coefficient bounds and the next marker at the exact consumed bit
+position; it does not search ahead to hide entropy errors.
 An independent survey of 35 data-track discs found the expected initial packet
 prefix in all 900,268 assembled video packets; it did not validate picture decode.
-The experimental decoder's `lsb_first` parameter now selects the actual entropy
-byte bit order. Its default preserves the previous LSB-first preview behavior;
-the separate picture structure scanner uses the observed MSB-first framing.
+The old 192×144 preview is retained for the parameter-sweep research tool via
+`CodecParams::legacy_preview`. Its bit-order and AC options do not affect
+native playback. `--full-decode` remains a CLI compatibility flag.
 
 ## Memory map (LLE / hardware access dump)
 

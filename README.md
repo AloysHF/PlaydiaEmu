@@ -12,7 +12,7 @@ Research-grade but usable for disc playback:
 
 - **HLE disc player (recommended)** — dual-track MODE2 CUE/BIN streaming, F1/F2/F3 video markers, XA ADPCM audio
 - **Interactive stream control** — finish embedded video before F2 jumps or button choices; unsupported command details remain under investigation
-- **Video** — proprietary MPEG-1-like DCT path to 320×240 RGB555 (approximate until AK8000 VLC is locked)
+- **Video** — recovered AK8000 row/VLC decoding produces recognizable 248×216 game pictures in a 320×240 RGB555 framebuffer; hardware pixel accuracy remains unverified
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
 - **Headless machine** — deterministic `run_frame`, save states, diagnostics
@@ -24,7 +24,7 @@ Research-grade but usable for disc playback:
 - **CDS-XA Form 2 streaming** — 2352-byte Mode2 sectors, dual-track CUE/BIN
 - **F1/F2/F3 routing** — video fragments including F2 overflow, F3 padding, and F2 scene navigation
 - **XA ADPCM audio** — 4-bit ADPCM sound groups, 37800/18900 Hz → stereo 44100
-- **320×240 RGB555 framebuffer** — approximate fixed-count AC reconstruction by default; experimental `--full-decode` coefficient scaling. Neither path reproduces original game pixels yet
+- **Native game video** — 27 rows of 4×4 transform blocks, run/level coefficients, macroblock DC prediction and separate Y/C quantizers; invalid pictures preserve the previous frame
 - **Save states** — content identity + CRC envelope
 - **Headless / inspect tooling** — sector and packet diagnostics without a window
 - **RetroArch integration** — libretro core for frontend use
@@ -98,7 +98,7 @@ directory.
 ### Tools
 
 ```powershell
-cargo run --release -p playdia-tools -- path\to\game.cue
+cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue
 ```
 
 For video packet header frequencies, run
@@ -106,13 +106,23 @@ For video packet header frequencies, run
 Add `--video-candidates` to rank packets by low body-byte entropy and long
 `0x55`/`0xAA` runs. The reported track-relative LBAs help target codec research;
 these patterns do not establish decoded pixels or a VLC table.
-Use `--video-rows` to count MSB-first 26-row sequences, ambiguous marker matches,
+Use `--video-rows` to count MSB-first 27-row sequences, ambiguous marker matches,
 and picture terminators in F2 tails. Packet assembly preserves pending video
 across FF-filled F3 sectors. See [AK8000 research](docs/AK8000-Research.md) for
-evidence and remaining decoding gaps; the preview still uses a speculative codec.
+evidence, the recovered decoder and remaining pixel-accuracy questions.
 `python tools/probe_sparse_vlc.py path\to\track.bin` checks a conservative partial
 codeword grammar on short rows; it also accepts a ZIP containing Track 2.
 Its counts are research diagnostics, not decoded coefficients or game pixels.
+
+Decode a specific picture without navigating the game, or validate a whole disc:
+
+```powershell
+cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
+cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
+```
+
+Packet numbers start at 1 and include interactive F2 packets. The frame tool
+exports native 248×216 PPMs; the player exports its 320×240 framebuffer.
 
 ## Testing
 

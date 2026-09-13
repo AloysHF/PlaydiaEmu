@@ -84,6 +84,8 @@ core metadata.
 - No Android / iOS / webOS packaging docs yet
 - Content loading is not yet the same dual-track HLE path as `playdia-emu play`
 - BIOS is still required for retail LLE boot
+- The shared core includes native AK8000 picture decoding; this does not remove
+  the libretro content-loading and LLE boot limitations above
 
 ## Building notes
 

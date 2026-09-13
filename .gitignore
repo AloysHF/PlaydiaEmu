@@ -3,6 +3,7 @@
 **/*.rs.bk
 
 tmp/
+__pycache__/
 
 # CodeGraph index
 .codegraph/

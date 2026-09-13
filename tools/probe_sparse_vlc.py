@@ -1,4 +1,4 @@
-"""Test partial AK8000 codeword shapes; this does not decode coefficients or pixels."""
+"""Historical partial grammar probe; prefer playdia-frame for native decoding."""
 
 import argparse
 from collections import Counter
@@ -64,7 +64,7 @@ def candidate_rows(packet):
     if bits[288:307] != SYNC + "00001":
         return
     starts = [288]
-    for row in range(2, 27):
+    for row in range(2, 28):
         pos = bits.find(SYNC + f"{row:05b}", starts[-1] + 19, end)
         if pos < 0:
             return

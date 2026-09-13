@@ -13,6 +13,10 @@ path = "src/bin/playdia_inspect.rs"
 name = "playdia-scan"
 path = "src/bin/playdia_scan.rs"
 
+[[bin]]
+name = "playdia-frame"
+path = "src/bin/playdia_frame.rs"
+
 [dependencies]
 playdia-core = { path = "../playdia-core" }
 anyhow = { workspace = true }

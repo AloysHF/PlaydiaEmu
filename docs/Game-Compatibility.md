@@ -45,8 +45,10 @@ Record:
 
 ## Notes
 
-- Default video path uses **fixed-count raw AC reconstruction**; frames are structured but
-  do not reproduce the original picture until the AK8000 VLC is locked.
+- Default video uses the recovered **248×216 AK8000 decoder**. Sample Soft,
+  Dragon Ball Z and Mari-nee pictures are recognizable; this does not establish
+  hardware pixel accuracy or full game compatibility. Use `playdia-frame
+  --check-all` to measure entropy coverage separately from navigation.
 - F2 jump and button-choice navigation is exercised on a private disc; timeout,
   quiz, and score semantics have not been verified on hardware.
 - Prefer `--release` builds for any visual check.

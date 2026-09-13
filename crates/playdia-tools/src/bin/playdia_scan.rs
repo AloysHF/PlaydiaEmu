@@ -231,6 +231,7 @@ fn build_grid() -> Vec<CodecParams> {
                         for dc_scale in [8i32] {
                             for scan_order in [0u8, 1, 2] {
                                 v.push(CodecParams {
+                                    legacy_preview: true,
                                     bs_offset,
                                     ac_count,
                                     ac_dequant,

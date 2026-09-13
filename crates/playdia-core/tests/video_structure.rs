@@ -11,7 +11,7 @@ fn put(bits: &mut Vec<bool>, value: u32, count: usize) {
     }
 }
 
-fn picture(ambiguous: bool) -> (Vec<u8>, [usize; 26], usize) {
+fn picture(ambiguous: bool) -> (Vec<u8>, [usize; 27], usize) {
     let mut bits = Vec::new();
     put(&mut bits, 0x400, 19);
     put(&mut bits, 1, 3);
@@ -20,7 +20,7 @@ fn picture(ambiguous: bool) -> (Vec<u8>, [usize; 26], usize) {
     for _ in 0..32 {
         put(&mut bits, 7, 8);
     }
-    let mut starts = [0; 26];
+    let mut starts = [0; 27];
     for (row, start) in starts.iter_mut().enumerate() {
         *start = bits.len();
         put(&mut bits, (0x20 << 5) | (row as u32 + 1), 19);

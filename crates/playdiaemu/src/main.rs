@@ -25,7 +25,7 @@ struct Cli {
     /// Target FPS for the window frontend
     #[arg(long, default_value_t = 30)]
     fps: u32,
-    /// Apply experimental quantization to the approximate AC coefficients
+    /// Compatibility flag; native AK8000 decoding is already enabled
     #[arg(long)]
     full_decode: bool,
     /// Mute host audio (window mode)
@@ -60,7 +60,7 @@ enum Cmd {
         /// Dump directory for periodic frames (with --dump-every).
         #[arg(long, default_value = "tmp/out")]
         dump_dir: PathBuf,
-        /// Apply experimental quantization to the approximate AC coefficients.
+        /// Compatibility flag; native AK8000 decoding is already enabled.
         #[arg(long)]
         full_decode: bool,
         /// Press a button at a host frame, e.g. --press-at 120:a.

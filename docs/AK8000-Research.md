@@ -1,4 +1,72 @@
-# AK8000 framing research
+# AK8000 decoding research
+
+## Native picture recovery (2026-09-13)
+
+The default Rust decoder now reconstructs recognizable disc pictures, including
+Sample Soft's INTERACTIVE / NO WAIT & HIGH SPEED screen, Dragon Ball Z scenes,
+and Mari-nee's title and button prompt. The output comes directly from compressed
+disc coefficients; no reference image, generated artwork or frame substitution
+is used. Hardware pixel accuracy has not been established.
+
+Three assumptions in the earlier sections below have been superseded:
+
+- There are **27 rows**, not the patent example's 26. Sequential coefficient
+  decoding reaches a row-27 marker and then the terminal 0x21. The old scanner
+  merged the last two rows. Native picture dimensions are 248×216.
+- Blocks ending at coefficient 15 **omit EOB**. Literal EOB counts alone reject
+  valid dense blocks and cannot validate the codec.
+- DC prediction is organized around **Y1 of each macroblock**. Y1 uses the
+  preceding macroblock's Y1; Y2/Y3/Y4 use the current Y1. Chroma predictors are
+  separate, and all predictors reset at each row. Accumulating every Y block
+  caused strong horizontal brightness bands.
+
+The recovered entropy tree has `01` EOB, signed run/level symbols, and the
+`001000` escape followed by four run bits and a signed ten-bit level. Escape
+levels are differences too, including when they occupy coefficient zero.
+The short-code tree resembles portions of H.261 after branch rearrangement,
+but H.261's run/level assignments fail the 16-coefficient block bounds. That
+standard table was not used as the native coefficient mapping.
+
+Code lengths were first inferred from sparse rows with independent samples.
+Run assignments were then constrained by exact row consumption, coefficient
+bounds and implicit full-block ends on complete pictures. Additional dense
+pictures and failing packets exposed rare symbols that sparse rows could not
+constrain. Level ordering within each run was inferred by code length and
+descending code value; rare entries remain subject to further validation.
+
+Reconstruction currently uses separate Y/C tables, factor × quantizer / 64,
+the 4×4 zigzag, fixed-point inverse DCT and YCbCr conversion. The patent's
+figure 4 supports the factor/64 lead. Nonlinear dequantization, exact hardware
+transform and color rounding still require comparison with trustworthy
+captures or chip logic. Clear game imagery is a separate milestone from
+hardware-identical RGB pixels.
+
+```powershell
+cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
+cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
+```
+
+The frame tool exports native 248×216 pixels. Normal playback centers them in
+320×240 and only presents a picture after all rows and padding validate.
+Decode failures retain the previous picture. The old 8×8 preview remains an
+explicit research-only `CodecParams::legacy_preview` option.
+
+Synthetic tests cover macroblock prediction, signed escapes, implicit block
+ends, truncated packets, coefficient overflow and video in interactive F2
+tails. Proprietary pictures and reference screenshots are not test fixtures.
+
+Full-disc native validation after correcting a rare run=5 symbol:
+
+| Disc | Pictures | All rows, blocks and trailer valid |
+|---|---:|---:|
+| Mari-nee no Heya | 10,957 | 10,957 |
+| Yumi to Tokoton Playdia | 11,283 | 11,283 |
+
+These tracks initially exposed 50 and 20 failures respectively and were then
+used to refine that symbol, so these are regression results, not untouched
+holdout scores. A 180-host-frame Mari-nee player run presents 103 pictures
+with zero failures and reaches the visible title/button-choice screen.
+Entropy coverage does not by itself prove the decoded pixel values.
 
 ## Evidence and sources
 
@@ -23,7 +91,7 @@ provided the F2-tail and bit-field leads tested here. Its older research notes
 contain conflicting codec models. In particular, a mandatory fixed DC token
 after every row marker is not assumed by this implementation.
 
-## Independently checked disc structure
+## Earlier framing-only survey (26-row interpretation superseded)
 
 Full scans of two private data tracks produced the following results. No disc
 content or hardware capture is included in this repository.
@@ -69,12 +137,11 @@ The core and inspector share fragment slicing and padding recognition. Tests
 cover F2 continuation, interleaved F3 padding, accumulator overflow, unaligned
 row markers, false terminators and ambiguous row sequences.
 
-The current rendered preview still uses the earlier speculative 192×144,
-8×8 codec. It does not produce original game pixels. The next entropy decoder
-must consume whole rows, validate exactly 186 block ends under the patent
-hypothesis, reject unresolved codewords, and check coefficient/prediction/
-transform rules before replacing the preview. Marker matching alone cannot
-establish a Huffman table, a correct image or hardware pixel accuracy.
+At this earlier stage the preview used a speculative 192×144, 8×8 codec and
+did not produce game imagery. Its proposed exactly-186-EOB condition proved
+too strict once dense blocks were decoded. The native decoder above replaces
+this preview. Marker matching alone still cannot establish a Huffman table,
+a correct image or hardware pixel accuracy.
 
 A separate exploratory probe combined the published short ladder codes,
 absolute-DC token and a proposed long escape family on 260 candidate rows
@@ -82,12 +149,16 @@ from a third disc. None parsed to the row end under that partial grammar.
 This rejects that incomplete implementation, not every possible completion of
 the codebook. No guessed coefficient decoder was added to the playback path.
 
-## Sparse codeword experiment
+## Historical sparse codeword experiment
 
 ```powershell
 python tools/probe_sparse_vlc.py path\to\track.bin
 python tools/probe_sparse_vlc.py path\to\disc.zip --candidate-family --gamma
 ```
+
+These recorded counts used the earlier 26-row scanner. The probe now scans
+27 row candidates; its partial grammar is retained only for historical work.
+Use `playdia-frame --check-all` for native entropy validation.
 
 The standard-library-only probe considers packets shorter than 7,500 trimmed
 bytes and candidate rows shorter than 650 bits. Its default grammar recognizes

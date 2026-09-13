@@ -2,10 +2,12 @@
 //!
 //! Picture headers occupy 36 bytes; MSB-first row markers follow at bit 288.
 //!
-//! The entropy decoder is experimental and does not reproduce original pixels.
+//! Native 248x216 pictures are decoded from the recovered AK8000 row syntax.
+//! Hardware pixel accuracy remains unverified.
 
 use crate::bitstream::BitReader;
 use crate::cd::XaPacket;
+pub mod ak8000;
 pub mod structure;
 use structure::{video_fragment, VIDEO_PACKET_CAP};
 
@@ -49,6 +51,8 @@ pub enum FrameKind {
 /// Legacy speculative 8x8 decode profile; not the observed row format.
 #[derive(Debug, Clone, Copy)]
 pub struct CodecParams {
+    /// Select the old 192x144 research preview instead of the native decoder.
+    pub legacy_preview: bool,
     pub width: usize,
     pub height: usize,
     pub bs_offset: usize,
@@ -70,6 +74,7 @@ pub struct CodecParams {
 impl Default for CodecParams {
     fn default() -> Self {
         Self {
+            legacy_preview: false,
             width: ENC_W,
             height: ENC_H,
             // Legacy byte offset retained only for the speculative preview.
@@ -257,6 +262,10 @@ impl VideoDecoder {
             }
             self.last_blocks = frames.last().map(|f| f.1).unwrap_or(0);
             let rgb_list: Vec<Vec<u8>> = frames.iter().map(|f| f.0.clone()).collect();
+            // Keep long disc playback from retaining every decoded picture.
+            if self.cache.len() >= 64 {
+                self.cache.clear();
+            }
             self.cache.insert(crc, rgb_list);
             for (rgb, _) in frames {
                 self.pending.push_back(rgb);
@@ -290,14 +299,17 @@ impl VideoDecoder {
     }
 
     fn blit_encoded(&mut self, rgb: &[u8]) {
-        if rgb.len() < ENC_W * ENC_H * 2 {
-            return;
-        }
-        let ox = (WIDTH - ENC_W) / 2;
-        let oy = (HEIGHT - ENC_H) / 2;
-        for y in 0..ENC_H {
-            for x in 0..ENC_W {
-                let i = (y * ENC_W + x) * 2;
+        let (width, height) = match rgb.len() {
+            n if n == ak8000::WIDTH * ak8000::HEIGHT * 2 => (ak8000::WIDTH, ak8000::HEIGHT),
+            n if n == ENC_W * ENC_H * 2 => (ENC_W, ENC_H),
+            _ => return,
+        };
+        self.framebuffer.fill(0);
+        let ox = (WIDTH - width) / 2;
+        let oy = (HEIGHT - height) / 2;
+        for y in 0..height {
+            for x in 0..width {
+                let i = (y * width + x) * 2;
                 let px = u16::from_le_bytes([rgb[i], rgb[i + 1]]);
                 self.framebuffer[(oy + y) * WIDTH + (ox + x)] = px;
             }
@@ -364,6 +376,11 @@ fn rgb888_to_555(r: u8, g: u8, b: u8) -> u16 {
 
 /// Attempt to decode pictures from one assembled F1 packet.
 pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)> {
+    if !p.legacy_preview {
+        return ak8000::decode(buf)
+            .map(|rgb| vec![(rgb, structure::PICTURE_ROWS * ak8000::BLOCKS_PER_ROW)])
+            .unwrap_or_default();
+    }
     if buf.len() < 44 {
         return Vec::new();
     }

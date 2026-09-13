@@ -1,7 +1,7 @@
 //! MSB-first picture framing; entropy symbols and pixels remain unverified.
 
 pub const PICTURE_HEADER_BYTES: usize = 36;
-pub const PICTURE_ROWS: usize = 26;
+pub const PICTURE_ROWS: usize = 27;
 pub const VIDEO_PACKET_CAP: usize = 256 * 1024;
 
 /// Strip sector control bytes without including Form2/ECC bytes.
@@ -64,7 +64,7 @@ pub struct PictureRows {
     pub ambiguous_rows: usize,
 }
 
-/// Find 26 ordered row markers and a terminal marker anchored to padding.
+/// Find 27 ordered row markers and a terminal marker anchored to padding.
 /// Marker-shaped bits can occur inside coefficients; do not infer valid pixels.
 pub fn scan_picture_rows(data: &[u8]) -> Option<PictureRows> {
     PictureHeader::parse(data)?;

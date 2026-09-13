@@ -43,7 +43,10 @@ fn sample_packet() -> Vec<u8> {
 #[test]
 fn same_packet_same_output() {
     let pkt = sample_packet();
-    let p = CodecParams::default();
+    let p = CodecParams {
+        legacy_preview: true,
+        ..CodecParams::default()
+    };
     let a = decode_packet_frames(&pkt, p);
     let b = decode_packet_frames(&pkt, p);
     // Real sample must produce frames; synthetic may not under EOB.
