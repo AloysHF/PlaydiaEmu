@@ -7,18 +7,23 @@ discs, BIOS images, or PPM dumps.
 
 | Status | Count |
 |--------|-------|
-| ✅ Verified (load + stream + video + audio) | 2 |
-| ⬜ Unlisted Redump titles | Many (same dual-track CUE layout expected) |
+| HLE player integration checks (load + stream + video + audio) | 2 |
+| Native entropy validation across complete disc streams | 37 |
+| Hardware pixel comparison or complete playthrough verified | 0 |
 
 ## Game List
 
 | Title | Load CUE | Stream track | Video frames | Audio PCM | Notes |
 |-------|----------|--------------|--------------|-----------|-------|
-| Mari-nee no Heya | ✅ | ✅ (Track 2) | ✅ (96 host / 96 decoded) | ✅ (~846k samples) | Approximate image |
-| Playdia Sample Soft | ✅ | ✅ | ✅ | ✅ | Approximate image |
-| Other Redump titles | ⬜ | Expected same | ⬜ | ⬜ | Expected same CUE layout |
+| Mari-nee no Heya | ✅ | ✅ (Track 2) | ✅ (180 host / 103 decoded) | ✅ | Native title and Push B prompt; waits for input |
+| Playdia Sample Soft | ✅ | ✅ | ✅ | ✅ | Native menu and demo pictures |
+| Other tested titles | ⬜ | Validated stream packets | See corpus report | ⬜ | Entropy checks do not establish navigation or full compatibility |
 
 Legend: ✅ verified · ⬜ not yet verified
+
+The [full corpus report](AK8000-Corpus-Validation.md) covers 1,135,539 packets
+from 37 discs, including two single-track titles. Eight Aqua Adventure packets
+are truncated in the last row; all remaining packets pass strict decoding.
 
 ## How to update
 

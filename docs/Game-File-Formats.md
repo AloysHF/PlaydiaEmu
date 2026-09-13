@@ -88,6 +88,8 @@ fixed-point 4×4 inverse DCT, followed by YCbCr conversion. Separate luma and
 chroma tables are retained. Rare VLCs, nonlinear quantization, hardware
 transform rounding and analog color conversion remain research questions.
 See [AK8000 research](AK8000-Research.md) for evidence and limitations.
+`playdia-frame` exports RGB888 before framebuffer quantization; normal
+playback retains the shared RGB555 framebuffer contract.
 
 The earlier 26-row assumption merged rows 26 and 27. Counting 186 literal
 EOBs was also insufficient because full blocks omit EOB. The native path

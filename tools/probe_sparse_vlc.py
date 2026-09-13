@@ -20,8 +20,10 @@ def open_track(path):
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as archive:
             tracks = [n for n in archive.namelist() if n.lower().endswith("(track 2).bin")]
+            if not tracks:
+                tracks = [n for n in archive.namelist() if n.lower().endswith(".bin")]
             if len(tracks) != 1:
-                raise ValueError("Expected exactly one Track 2 BIN in the ZIP")
+                raise ValueError("Expected one Track 2 BIN or a single-track BIN in the ZIP")
             with archive.open(tracks[0]) as stream:
                 yield stream
     else:

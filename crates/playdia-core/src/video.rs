@@ -48,7 +48,7 @@ pub enum FrameKind {
     Progressive,
 }
 
-/// Legacy speculative 8x8 decode profile; not the observed row format.
+/// Decoder selection and parameters for the optional legacy 8x8 preview.
 #[derive(Debug, Clone, Copy)]
 pub struct CodecParams {
     /// Select the old 192x144 research preview instead of the native decoder.

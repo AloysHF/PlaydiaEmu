@@ -122,7 +122,10 @@ cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
 ```
 
 Packet numbers start at 1 and include interactive F2 packets. The frame tool
-exports native 248×216 PPMs; the player exports its 320×240 framebuffer.
+exports native 248×216 RGB888 PPMs; the player exports its 320×240 RGB555
+framebuffer. A [37-disc validation run](docs/AK8000-Corpus-Validation.md) passed
+1,135,531 of 1,135,539 picture packets; eight packets end inside their final row.
+This measures entropy coverage, not full game compatibility or hardware pixel accuracy.
 
 ## Testing
 
@@ -199,18 +202,19 @@ for load, stream routing, video frames, and audio PCM.
 
 | Title | Status |
 |-------|--------|
-| Mari-nee no Heya | Verified (approximate image) |
-| Playdia Sample Soft | Verified (approximate image) |
-| Other Redump titles | Expected same CUE layout; not yet listed |
+| Mari-nee no Heya | Native title/button screen; HLE video/audio playback checked |
+| Playdia Sample Soft | Native menu and demo imagery; HLE playback checked |
+| Other Redump titles | See the 37-disc entropy report; complete playthroughs remain unverified |
 
 For the detailed matrix and how to update it, see
 [Game Compatibility](docs/Game-Compatibility.md).
 
 ## Content Formats
 
-Playdia software ships as dual-track CD images (CUE/BIN, 2352-byte Mode2
-sectors). Track 1 is ISO9660 data; Track 2 carries the interactive FMV /
-audio stream with F1/F2/F3 markers and XA ADPCM.
+Most tested Playdia software uses dual-track CUE/BIN images with 2352-byte
+Mode2 sectors. Track 1 is ISO9660 data; Track 2 carries the interactive FMV /
+audio stream with F1/F2/F3 markers and XA ADPCM. Two tested titles use a single
+MODE2/2352 track instead.
 
 See [Game File Formats](docs/Game-File-Formats.md) for sector layout, Mode 2
 subheader bits, Form 2 audio groups, and video markers.

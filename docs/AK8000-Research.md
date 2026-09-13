@@ -46,7 +46,7 @@ cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 52
 cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
 ```
 
-The frame tool exports native 248×216 pixels. Normal playback centers them in
+The frame tool exports native 248×216 RGB888 pixels. Normal playback centers them in
 320×240 and only presents a picture after all rows and padding validate.
 Decode failures retain the previous picture. The old 8×8 preview remains an
 explicit research-only `CodecParams::legacy_preview` option.
@@ -67,6 +67,12 @@ used to refine that symbol, so these are regression results, not untouched
 holdout scores. A 180-host-frame Mari-nee player run presents 103 pictures
 with zero failures and reaches the visible title/button-choice screen.
 Entropy coverage does not by itself prove the decoded pixel values.
+
+Subsequent validation covered all 37 supplied disc archives: 1,135,531 of
+1,135,539 pictures pass, including all pictures in 36 discs. The remaining
+eight Aqua Adventure packets exhaust their available data in row 27 and lack
+a terminal marker. Their checked F2 sector EDCs match. See the
+[full corpus report](AK8000-Corpus-Validation.md) for counts and reproduction.
 
 ## Evidence and sources
 

@@ -137,8 +137,10 @@ cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
 This tool reads pictures in disc order without following scene commands.
 Indices start at 1 and include interactive F2 pictures. `--check-all` reports
 failed packet indices, track-relative LBAs, rows, blocks and bit offsets, and
-exits unsuccessfully if any picture fails. `--assembled` accepts an already
-assembled packet for isolated debugging. PPM output is native 248×216 RGB.
+exits unsuccessfully if any picture fails. CUEs and raw MODE2/2352 BIN tracks
+are supported. `--assembled` accepts an already assembled packet for isolated
+debugging. PPM output is native 248×216 RGB888, retaining the reconstructed
+channel precision before the player's RGB555 conversion.
 
 ## LLE headless (optional)
 

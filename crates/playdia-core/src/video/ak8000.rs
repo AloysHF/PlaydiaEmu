@@ -130,15 +130,28 @@ fn inverse(coefficients: &[i32; 16], quant: &[u8; 16], factor: u8) -> [i32; 16] 
 
 /// Decode exactly one picture, rejecting incomplete rows and trailing entropy.
 pub fn decode(data: &[u8]) -> Result<Vec<u8>, DecodeError> {
-    decode_inner(data, true)
+    decode_inner(data, Output::Rgb555)
+}
+
+/// Export native pixels without reducing the reconstructed channels to five bits.
+pub fn decode_rgb888(data: &[u8]) -> Result<Vec<u8>, DecodeError> {
+    decode_inner(data, Output::Rgb888)
 }
 
 /// Check entropy and framing without running the pixel transform.
 pub fn validate(data: &[u8]) -> Result<(), DecodeError> {
-    decode_inner(data, false).map(|_| ())
+    decode_inner(data, Output::Validate).map(|_| ())
 }
 
-fn decode_inner(data: &[u8], render: bool) -> Result<Vec<u8>, DecodeError> {
+#[derive(Clone, Copy)]
+enum Output {
+    Validate,
+    Rgb555,
+    Rgb888,
+}
+
+fn decode_inner(data: &[u8], output: Output) -> Result<Vec<u8>, DecodeError> {
+    let render = !matches!(output, Output::Validate);
     let mut reader = Reader {
         data,
         pos: 0,
@@ -218,7 +231,12 @@ fn decode_inner(data: &[u8], render: bool) -> Result<Vec<u8>, DecodeError> {
     if !render {
         return Ok(Vec::new());
     }
-    let mut rgb = Vec::with_capacity(WIDTH * HEIGHT * 2);
+    let channels = if matches!(output, Output::Rgb888) {
+        3
+    } else {
+        2
+    };
+    let mut rgb = Vec::with_capacity(WIDTH * HEIGHT * channels);
     for y in 0..HEIGHT {
         for x in 0..WIDTH {
             let luma = planes[0][y * WIDTH + x] + 128;
@@ -227,12 +245,16 @@ fn decode_inner(data: &[u8], render: bool) -> Result<Vec<u8>, DecodeError> {
             let r = i64::from(luma) + ((91881 * cr) >> 16);
             let g = i64::from(luma) - ((22554 * cb + 46802 * cr) >> 16);
             let b = i64::from(luma) + ((116130 * cb) >> 16);
-            let pixel = super::rgb888_to_555(
+            let (r, g, b) = (
                 r.clamp(0, 255) as u8,
                 g.clamp(0, 255) as u8,
                 b.clamp(0, 255) as u8,
             );
-            rgb.extend_from_slice(&pixel.to_le_bytes());
+            if matches!(output, Output::Rgb888) {
+                rgb.extend_from_slice(&[r, g, b]);
+            } else {
+                rgb.extend_from_slice(&super::rgb888_to_555(r, g, b).to_le_bytes());
+            }
         }
     }
     Ok(rgb)

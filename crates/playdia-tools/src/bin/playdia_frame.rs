@@ -3,7 +3,6 @@ use clap::Parser;
 use playdia_core::cd::{XaDemux, XaPacket};
 use playdia_core::content::{parse_raw_sector, DiscImage};
 use playdia_core::video::ak8000;
-use playdia_core::video::rgb555_to_rgb888;
 use playdia_core::video::structure::{video_fragment, VIDEO_PACKET_CAP};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -27,13 +26,10 @@ struct Cli {
 }
 
 fn dump(data: &[u8], output: &Path) -> Result<()> {
-    let rgb = ak8000::decode(data).map_err(|e| anyhow::anyhow!("decode failed: {e:?}"))?;
+    let rgb = ak8000::decode_rgb888(data).map_err(|e| anyhow::anyhow!("decode failed: {e:?}"))?;
     let mut file = std::io::BufWriter::new(std::fs::File::create(output)?);
     write!(file, "P6\n{} {}\n255\n", ak8000::WIDTH, ak8000::HEIGHT)?;
-    for bytes in rgb.as_chunks::<2>().0 {
-        let (r, g, b) = rgb555_to_rgb888(u16::from_le_bytes(*bytes));
-        file.write_all(&[r, g, b])?;
-    }
+    file.write_all(&rgb)?;
     file.flush()?;
     println!(
         "wrote {} ({}x{})",
@@ -56,12 +52,21 @@ fn main() -> Result<()> {
         return Ok(());
     }
     let disc = DiscImage::from_path(&cli.input).context("read disc")?;
-    let track = disc.stream_track().context("disc has no stream track")?;
+    let stream = disc
+        .stream_track()
+        .map(|track| track.data.as_slice())
+        .or_else(|| {
+            disc.single
+                .as_ref()
+                .filter(|image| image.raw)
+                .map(|image| image.data.as_slice())
+        })
+        .context("a CUE or raw MODE2/2352 stream track is required")?;
     let mut demux = XaDemux::new();
     let mut buffer = Vec::new();
     let mut overflow = false;
     let (mut count, mut valid, mut failed) = (0u64, 0u64, 0u64);
-    for (lba, raw) in track.data.as_chunks::<2352>().0.iter().enumerate() {
+    for (lba, raw) in stream.as_chunks::<2352>().0.iter().enumerate() {
         let Some(sector) = parse_raw_sector(raw) else {
             continue;
         };
