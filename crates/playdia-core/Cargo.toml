@@ -11,3 +11,4 @@ crc32fast = { workspace = true }
 log = { workspace = true }
 
 [dev-dependencies]
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-fmt", "run-cargo-clippy"] }

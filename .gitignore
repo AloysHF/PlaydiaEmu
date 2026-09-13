@@ -2,9 +2,10 @@
 /target/
 **/*.rs.bk
 
-# Local research corpus / copyrighted
-tmp/**
-!tmp/.gitkeep
+tmp/
+
+# CodeGraph index
+.codegraph/
 
 # Local agent instructions
 CLAUDE.md
