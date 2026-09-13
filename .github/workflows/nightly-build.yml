@@ -1,15 +1,27 @@
-name: Release
+name: Nightly Build
+
+# Build native binaries every night and publish them as a rolling
+# `nightly-build` GitHub prerelease, so users can always grab the
+# latest from master without waiting for a tagged version.
+#
+# Triggers:
+#   - Cron at 20:00 UTC (04:00 Beijing) every day.
+#   - Manual workflow_dispatch.
+#   - Every push to master (so the rolling release always reflects HEAD).
 
 on:
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    branches: [master]
 
 permissions:
   contents: write
 
 jobs:
   build:
+    name: Build (${{ matrix.target }})
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +45,14 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      - name: Compute version metadata
+        id: ver
+        shell: bash
+        run: |
+          echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "DATETIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_OUTPUT"
+          echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -44,13 +64,14 @@ jobs:
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: nightly-${{ matrix.target }}
 
       - name: Install Linux build dependencies
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libx11-dev libxkbcommon-dev
+        timeout-minutes: 10
 
       - name: Build standalone
         run: cargo build -p playdiaemu --release --target ${{ matrix.target }}
@@ -78,22 +99,6 @@ jobs:
           cp crates/playdiaemu-libretro/playdiaemu_libretro.info "$out/playdiaemu_libretro.info"
           ls -la "$out"
 
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ../../../${{ matrix.artifact }}.tar.gz playdia-emu
-          cd ../../..
-
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          cd target/${{ matrix.target }}/release
-          7z a ../../../${{ matrix.artifact }}.zip playdia-emu.exe
-          cd ../../..
-
       - name: Package libretro (Unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -110,6 +115,22 @@ jobs:
           7z a ../${{ matrix.artifact }}-libretro.zip ${{ matrix.artifact }}
           cd ..
 
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.artifact }}.tar.gz playdia-emu
+          cd ../../..
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../${{ matrix.artifact }}.zip playdia-emu.exe
+          cd ../../..
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -117,12 +138,20 @@ jobs:
           path: |
             ${{ matrix.artifact }}.*
             ${{ matrix.artifact }}-libretro.*
+          retention-days: 7
 
   build-android:
     name: Build (Android)
     runs-on: ubuntu-22.04
 
     steps:
+      - name: Compute version metadata
+        id: ver
+        shell: bash
+        run: |
+          echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -142,7 +171,7 @@ jobs:
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
         with:
-          key: release-android
+          key: nightly-android
 
       - name: Build libretro core for Android
         run: |
@@ -175,12 +204,20 @@ jobs:
         with:
           name: playdia-emu-android
           path: playdia-emu-android-libretro.tar.gz
+          retention-days: 7
 
   build-ios:
     name: Build (iOS)
     runs-on: macos-latest
 
     steps:
+      - name: Compute version metadata
+        id: ver
+        shell: bash
+        run: |
+          echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -192,7 +229,7 @@ jobs:
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
         with:
-          key: release-ios
+          key: nightly-ios
 
       - name: Build libretro core (arm64 device)
         run: cargo build -p playdiaemu-libretro --release --target aarch64-apple-ios
@@ -229,6 +266,7 @@ jobs:
         with:
           name: playdia-emu-ios
           path: playdia-emu-ios-libretro.tar.gz
+          retention-days: 7
 
   build-webos:
     name: Build (webOS)
@@ -238,6 +276,13 @@ jobs:
       RUST_TARGET: armv7-unknown-linux-gnueabi
 
     steps:
+      - name: Compute version metadata
+        id: ver
+        shell: bash
+        run: |
+          echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v7
 
@@ -260,7 +305,7 @@ jobs:
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
         with:
-          key: release-webos
+          key: nightly-webos
 
       - name: Build libretro core
         env:
@@ -296,43 +341,65 @@ jobs:
         with:
           name: playdia-emu-webos
           path: playdia-emu-webos-libretro.tar.gz
+          retention-days: 7
 
   release:
-    name: Create Release
+    name: Publish Nightly Release
     needs: [build, build-android, build-ios, build-webos]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - name: Compute version metadata
+        id: ver
+        shell: bash
+        run: |
+          echo "DATE=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "DATETIME=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_OUTPUT"
+          echo "SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          draft: true
-          prerelease: false
-          generate_release_notes: true
-          name: "PlaydiaEmu ${{ github.ref_name }}"
-          body: |
-            PlaydiaEmu ${{ github.ref_name }}
+      - name: Flatten artifacts
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( \
+            -name '*.tar.gz' -o \
+            -name '*.zip' \
+          \) -exec cp {} release-assets/ \;
+          ls -la release-assets
 
-            ## Downloads
-
-            ### Standalone emulator
-            - **Linux x86_64**: `playdia-emu-linux-x86_64.tar.gz`
-            - **Linux aarch64**: `playdia-emu-linux-aarch64.tar.gz`
-            - **macOS x86_64**: `playdia-emu-macos-x86_64.tar.gz`
-            - **macOS aarch64**: `playdia-emu-macos-aarch64.tar.gz`
-            - **Windows x86_64**: `playdia-emu-windows-x86_64.zip`
-
-            ### libretro core (for RetroArch)
-            - Files ending in `-libretro.*` contain `playdiaemu_libretro.<ext>`,
-              plus `playdiaemu_libretro.info`, ready to drop into RetroArch.
-            - **Android**: `playdia-emu-android-libretro.tar.gz` (arm64-v8a, armeabi-v7a, x86, x86_64)
-            - **iOS**: `playdia-emu-ios-libretro.tar.gz` (universal arm64+x86_64 device + arm64 simulator)
-            - **webOS**: `playdia-emu-webos-libretro.tar.gz` (armv7)
-          files: artifacts/**/*
+      - name: Recreate nightly-build release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DATE: ${{ steps.ver.outputs.DATE }}
+          DATETIME: ${{ steps.ver.outputs.DATETIME }}
+          SHORT_SHA: ${{ steps.ver.outputs.SHORT_SHA }}
+        shell: bash
+        run: |
+          # Delete previous rolling release + tag
+          gh release delete nightly-build --repo "$REPO" --yes --cleanup-tag 2>/dev/null || true
+          gh api -X DELETE "repos/$REPO/git/refs/tags/nightly-build" 2>/dev/null || true
+
+          notes=$(cat <<EOF
+          Automated nightly build — **for testing only**.
+
+          - Built: $DATETIME
+          - Commit: [\`$SHORT_SHA\`](https://github.com/$REPO/commit/${{ github.sha }})
+          - Platforms: Windows x86_64, macOS x86_64/aarch64, Linux x86_64/aarch64, Android (arm64-v8a/armeabi-v7a/x86/x86_64), iOS (arm64/x86_64/simulator), webOS (armv7)
+          - Includes the standalone emulator (\`playdia-emu\`) and the libretro core (\`*-libretro.*\`) for RetroArch
+
+          ⚠️ Unsigned build: Windows SmartScreen / macOS Gatekeeper may block on first launch.
+          EOF
+          )
+
+          gh release create nightly-build \
+            --repo "$REPO" \
+            --target "${{ github.sha }}" \
+            --title "Nightly Build $DATE ($SHORT_SHA)" \
+            --notes "$notes" \
+            --prerelease \
+            release-assets/*

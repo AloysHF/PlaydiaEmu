@@ -160,7 +160,7 @@ pub extern "C" fn retro_get_system_info(info: *mut SystemInfo) {
         *info = SystemInfo {
             library_name: cstr(b"PlaydiaEmu\0"),
             library_version: cstr(b"0.1.0\0"),
-            valid_extensions: cstr(b"iso\0"),
+            valid_extensions: cstr(b"cue|iso|bin\0"),
             need_fullpath: 1,
             block_extract: 0,
         };

@@ -1,17 +1,13 @@
 [package]
-name = "playdia"
+name = "playdiaemu"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Playdia standalone frontend (CLI + windowed player)"
-
-[[bin]]
-name = "playdia"
-path = "src/main.rs"
+description = "Playdia standalone emulator (window + CLI)"
 
 [[bin]]
 name = "playdia-emu"
-path = "src/bin/playdia_emu.rs"
+path = "src/main.rs"
 
 [dependencies]
 playdia-core = { path = "../playdia-core" }

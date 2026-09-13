@@ -1,0 +1,16 @@
+[package]
+name = "playdiaemu-libretro"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "libretro core for PlaydiaEmu (loadable by RetroArch)"
+
+[lib]
+# Cargo names the cdylib after this lib target (playdiaemu). Release/nightly
+# workflows rename it to playdiaemu_libretro.<ext>, matching Native32Emu /
+# SPMP8000Emu and RetroArch's expected core filename.
+name = "playdiaemu"
+crate-type = ["cdylib"]
+
+[dependencies]
+playdia-core = { path = "../playdia-core" }

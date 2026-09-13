@@ -25,13 +25,13 @@ Legend: ✅ verified · ⬜ not yet verified
 Inspect a title:
 
 ```powershell
-cargo run --release -p playdia -- inspect "tmp/iso/<title>/<title>.cue"
+cargo run --release -p playdiaemu -- inspect "tmp/iso/<title>/<title>.cue"
 ```
 
 Play headlessly and dump a frame:
 
 ```powershell
-cargo run --release -p playdia -- play `
+cargo run --release -p playdiaemu -- play `
   "tmp/iso/<title>/<title>.cue" `
   --frames 120 --dump-ppm tmp/out/<title>.ppm
 ```

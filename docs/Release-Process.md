@@ -11,16 +11,17 @@ This document describes how to publish a new release of PlaydiaEmu.
 
 ### 1. Update version numbers
 
-Version numbers must be updated in **two files**:
+Version numbers must be updated in **three files**:
 
 | File | Field | Current |
 |------|-------|---------|
 | `Cargo.toml` (workspace root) | `[workspace.package] version` | `"0.1.0"` |
-| `crates/playdia-libretro/src/lib.rs` | `library_version` in `retro_get_system_info` | `"0.1.0"` |
+| `crates/playdiaemu-libretro/src/lib.rs` | `library_version` in `retro_get_system_info` | `"0.1.0"` |
+| `crates/playdiaemu-libretro/playdiaemu_libretro.info` | `display_version` | `"0.1.0"` |
 
-Both values must match. If a `playdia_libretro.info` file is added later, keep
-its `display_version` in sync as well — RetroArch reads `display_version` to
-display the core version to users.
+All three values must match. The `.info` file is copied into the release
+artifacts — RetroArch reads `display_version` to display the core version to
+users.
 
 ```bash
 # Example: bumping to 0.2.0
@@ -28,13 +29,17 @@ display the core version to users.
 sed -i 's/^version = "0.1.0"/version = "0.2.0"/' Cargo.toml
 
 # 2. Edit libretro library_version
-# crates/playdia-libretro/src/lib.rs → library_version: c"0.2.0\0"
+# crates/playdiaemu-libretro/src/lib.rs → library_version: c"0.2.0\0"
+
+# 3. Edit .info display_version
+sed -i 's/^display_version = "0.1.0"/display_version = "0.2.0"/' \
+  crates/playdiaemu-libretro/playdiaemu_libretro.info
 ```
 
 ### 2. Commit the version bump
 
 ```bash
-git add Cargo.toml Cargo.lock crates/playdia-libretro/src/lib.rs
+git add Cargo.toml Cargo.lock crates/playdiaemu-libretro/src/lib.rs crates/playdiaemu-libretro/playdiaemu_libretro.info
 git commit -m "chore: bump version to 0.2.0"
 git push origin master
 ```
@@ -53,7 +58,7 @@ git push origin v0.2.0
 Pushing the tag triggers `.github/workflows/release.yml`, which:
 
 1. **Builds standalone binaries** for Linux, macOS (x86_64 + aarch64), and Windows
-2. **Builds libretro cores** for the same platforms as `playdia_libretro.<ext>`
+2. **Builds libretro cores** for the same platforms as `playdiaemu_libretro.<ext>`
 3. **Creates a draft GitHub Release** with:
    - Auto-generated release notes (PRs and commits since the previous tag)
    - All build artifacts attached
@@ -71,16 +76,16 @@ Pushing the tag triggers `.github/workflows/release.yml`, which:
    - `*-libretro.*` (one per platform)
 5. Click **Publish release**
 
-### 6. Sync `.info` file to upstream libretro-super (when present)
+### 6. Sync `.info` file to upstream libretro-super
 
 RetroArch's **Online Updater > Core Downloader** reads the `.info` file from the
 upstream [libretro-super](https://github.com/libretro/libretro-super) repository,
-not from this repo. Once `crates/playdia-libretro/playdia_libretro.info` exists
-and changes in a release, submit a PR to sync it:
+not from this repo. If `playdiaemu_libretro.info` changed in a release, submit
+a PR to sync it:
 
 1. Fork [libretro/libretro-super](https://github.com/libretro/libretro-super)
-2. Copy `crates/playdia-libretro/playdia_libretro.info` from this repo
-   to `dist/info/playdia_libretro.info` in the fork
+2. Copy `crates/playdiaemu-libretro/playdiaemu_libretro.info` from this repo
+   to `dist/info/playdiaemu_libretro.info` in the fork
 3. Submit a PR to `libretro/libretro-super` — reference the PlaydiaEmu release
    tag and list the changed fields in the PR description
 
@@ -119,5 +124,5 @@ with the existing draft.
 ### Version mismatch in RetroArch
 
 - Ensure `Cargo.toml` and `library_version` in
-  `crates/playdia-libretro/src/lib.rs` have the same version string
+  `crates/playdiaemu-libretro/src/lib.rs` have the same version string
 - If an `.info` file is added later, it is bundled as-is into the release artifacts

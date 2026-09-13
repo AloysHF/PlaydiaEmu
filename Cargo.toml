@@ -2,9 +2,9 @@
 resolver = "2"
 members = [
     "crates/playdia-core",
-    "crates/playdia",
+    "crates/playdiaemu",
     "crates/playdia-tools",
-    "crates/playdia-libretro",
+    "crates/playdiaemu-libretro",
 ]
 
 [workspace.package]

@@ -35,7 +35,7 @@ Research-grade but usable for disc playback:
 ### Standalone Mode (HLE, no BIOS)
 
 ```powershell
-cargo run --release -p playdia -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
+cargo run --release -p playdiaemu -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
 ```
 
 For a reproducible button choice in headless playback, add for example
@@ -44,7 +44,7 @@ For a reproducible button choice in headless playback, add for example
 Windowed playback:
 
 ```powershell
-cargo run --release -p playdia --bin playdia-emu -- path\to\game.cue
+cargo run --release -p playdiaemu -- path\to\game.cue
 ```
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
@@ -57,7 +57,7 @@ Build the libretro core and load a disc image through RetroArch's
 **Load Content** menu:
 
 ```powershell
-cargo build --release -p playdia-libretro
+cargo build --release -p playdiaemu-libretro
 ```
 
 See the [RetroArch Core](docs/RetroArch-Core.md) guide for installation,
@@ -70,14 +70,14 @@ Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
 ### Standalone Mode
 
 ```powershell
-cargo build --release -p playdia
-cargo run --release -p playdia -- play path\to\game.cue --frames 180
+cargo build --release -p playdiaemu
+cargo run --release -p playdiaemu -- play path\to\game.cue --frames 180
 ```
 
 ### Window frontend
 
 ```powershell
-cargo build --release -p playdia --bin playdia-emu
+cargo build --release -p playdiaemu
 ```
 
 The binary is produced at `target\release\playdia-emu.exe` (`.exe` on Windows).
@@ -85,13 +85,15 @@ The binary is produced at `target\release\playdia-emu.exe` (`.exe` on Windows).
 ### Libretro Core (for RetroArch)
 
 ```powershell
-cargo build --release -p playdia-libretro
+cargo build --release -p playdiaemu-libretro
 ```
 
 Cargo names the cdylib after its lib target, so this produces
-`playdia_libretro.dll` on Windows (`libplaydia_libretro.so` on Linux,
-`libplaydia_libretro.dylib` on macOS) under `target/release/`. Place the file
-in RetroArch's `cores/` directory.
+`playdiaemu.dll` on Windows (`libplaydiaemu.so` on Linux,
+`libplaydiaemu.dylib` on macOS) under `target/release/`. Rename it to
+`playdiaemu_libretro.<ext>` before placing it in RetroArch's `cores/`
+directory. Copy `playdiaemu_libretro.info` into RetroArch's `info/`
+directory.
 
 ### Tools
 
@@ -138,11 +140,11 @@ crates/
 │       ├── state.rs         # Save-state envelope
 │       ├── content.rs       # Content identity
 │       └── diagnostics.rs   # Unmapped / unknown / budget counters
-├── playdia/                 # Standalone binaries
+├── playdiaemu/              # Standalone binary (→ playdia-emu)
 │   └── src/
-│       ├── main.rs          # CLI (play / inspect / headless)
-│       └── bin/playdia_emu.rs  # minifb + rodio window frontend
-├── playdia-libretro/        # libretro cdylib
+│       └── main.rs          # Window + CLI (play / inspect / headless)
+├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
+│   ├── playdiaemu_libretro.info
 │   └── src/lib.rs           # libretro C ABI
 └── playdia-tools/           # ISO/XA inspector and research utilities
     └── src/bin/

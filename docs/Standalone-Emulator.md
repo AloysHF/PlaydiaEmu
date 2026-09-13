@@ -1,8 +1,8 @@
 # Standalone Emulator
 
-This guide covers building and running the standalone Playdia binaries, loading
-discs, keyboard controls, headless mode, frame dumps, and all command-line
-options.
+This guide covers building and running the standalone `playdia-emu` binary,
+loading discs, keyboard controls, headless mode, frame dumps, and all
+command-line options.
 
 ## Supported Platforms
 
@@ -17,24 +17,15 @@ options.
 Build from source:
 
 ```powershell
-# CLI (play / inspect / headless)
-cargo build --release -p playdia
-
-# Window frontend
-cargo build --release -p playdia --bin playdia-emu
+cargo build --release -p playdiaemu
 ```
 
-Binaries:
-
-- `target/release/playdia.exe` — CLI
-- `target/release/playdia-emu.exe` — window frontend (minifb + rodio)
+The binary is produced at `target/release/playdia-emu.exe` (`.exe` on Windows).
 
 ## Synopsis
 
-### CLI
-
 ```text
-playdia <COMMAND>
+playdia-emu [OPTIONS] [DISC] [COMMAND]
 
 Commands:
   inspect   Inspect a CUE/BIN or raw disc image
@@ -42,16 +33,12 @@ Commands:
   headless  LLE-oriented headless (SH-1 + bus)
 ```
 
-### Window
-
-```text
-playdia-emu [OPTIONS] <DISC>
-```
+With no subcommand, `DISC` opens the windowed HLE player.
 
 ## HLE disc player (recommended, no BIOS)
 
 ```powershell
-cargo run --release -p playdia -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
+cargo run --release -p playdiaemu -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
 ```
 
 ### `play` options
@@ -72,14 +59,14 @@ for these jumps. Timeout, score, and quiz behavior is still incomplete.
 The current video decoder renders approximate blocks; it cannot reproduce the
 original game picture until the AK8000 entropy format is recovered.
 
-Example: `playdia play game.cue --frames 180 --press-at 122:a --dump-ppm scene.ppm`.
+Example: `playdia-emu play game.cue --frames 180 --press-at 122:a --dump-ppm scene.ppm`.
 Frame numbers start at zero. Use a frame after a choice prompt appears; the
 `waiting=true` field in the progress output marks that state.
 
 Example (private research corpus — do not commit discs):
 
 ```powershell
-cargo run --release -p playdia -- play `
+cargo run --release -p playdiaemu -- play `
   "tmp/iso/Mari-nee no Heya (Japan)/Mari-nee no Heya (Japan).cue" `
   --frames 90 --dump-ppm tmp/out/mari.ppm
 ```
@@ -87,10 +74,10 @@ cargo run --release -p playdia -- play `
 ## Window frontend
 
 ```powershell
-cargo run --release -p playdia --bin playdia-emu -- path\to\game.cue
+cargo run --release -p playdiaemu -- path\to\game.cue
 ```
 
-### `playdia-emu` options
+### Window options
 
 | Option | Default | Description |
 |---|---|---|
@@ -119,7 +106,7 @@ Print disc kind, tracks, CRC, ISO volume label sample, and stream-track
 F1/F2/F3 / audio sector counts:
 
 ```powershell
-cargo run --release -p playdia -- inspect path\to\game.cue
+cargo run --release -p playdiaemu -- inspect path\to\game.cue
 cargo run --release -p playdia-tools -- path\to\game.cue
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-candidates
@@ -135,7 +122,7 @@ bitstream patterns, not evidence of pixel-accurate decoding.
 Requires a user-supplied BIOS for retail boot. Prefer `play` for disc playback.
 
 ```powershell
-cargo run --release -p playdia -- headless path\to\disc.iso --bios bios.bin --frames 60
+cargo run --release -p playdiaemu -- headless path\to\disc.iso --bios bios.bin --frames 60
 ```
 
 ### `headless` options
@@ -162,7 +149,7 @@ Both binaries use `env_logger`. Default filter is `info`. For example:
 
 ```powershell
 $env:RUST_LOG="debug"
-cargo run --release -p playdia -- play path\to\game.cue --frames 30
+cargo run --release -p playdiaemu -- play path\to\game.cue --frames 30
 ```
 
 ## See also
