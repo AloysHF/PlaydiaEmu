@@ -5,7 +5,7 @@
 //! - channel 0 + submode bit3 (0x08) data sectors carry markers:
 //!   - 0xF1: video payload bytes
 //!   - 0xF2: frame-end or interactive command (submode bit0 distinguishes)
-//!   - 0xF3: scene reset
+//!   - 0xF3: FF-filled padding; other forms retain legacy reset handling
 
 use crate::content::{DiscImage, Sector, COOKED_SECTOR, RAW_SECTOR};
 
@@ -33,6 +33,7 @@ pub fn route_sector(sector: &Sector) -> XaRoute {
                     XaRoute::FrameEnd
                 }
             }
+            0xF3 if crate::video::structure::is_video_padding(&sector.data) => XaRoute::Other,
             0xF3 => XaRoute::SceneReset,
             _ => XaRoute::Other,
         };

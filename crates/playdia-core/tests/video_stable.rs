@@ -63,7 +63,7 @@ fn packet_header_rejects_garbage() {
 }
 
 #[test]
-fn packet_header_preserves_both_quantizers_and_segment_code() {
+fn packet_header_preserves_both_quantizers_and_raw_row_bytes() {
     let mut packet = vec![0; 44];
     packet[..3].copy_from_slice(&[0, 0x80, 4]);
     packet[3] = 13;
@@ -74,8 +74,7 @@ fn packet_header_preserves_both_quantizers_and_segment_code() {
     assert_eq!(header.qscale, 13);
     assert_eq!(header.quant_luma, [7; 16]);
     assert_eq!(header.quant_chroma, [11; 16]);
-    assert_eq!(header.segment_code, 0x21);
-    assert_eq!(header.flags, 6);
+    assert_eq!(header.raw_row_prefix, [0, 0x80, 0x21, 6]);
     packet[36] = 1;
     assert!(parse_packet_header(&packet).is_none());
 }

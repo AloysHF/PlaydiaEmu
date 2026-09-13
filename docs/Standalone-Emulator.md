@@ -109,6 +109,7 @@ F1/F2/F3 / audio sector counts:
 cargo run --release -p playdiaemu -- inspect path\to\game.cue
 cargo run --release -p playdia-tools -- path\to\game.cue
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers
+cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-rows
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-candidates
 ```
 
@@ -116,6 +117,9 @@ The video commands assemble F1/F2 packets without exporting video data. The
 candidate report also ranks low-entropy bodies and long `0x55`/`0xAA` runs,
 including track-relative LBAs for follow-up codec analysis. These are encoded
 bitstream patterns, not evidence of pixel-accurate decoding.
+The row report counts ordered 26-row candidates and ambiguous matches. F2
+overflow contributes actual video bytes; FF-filled F3 sectors preserve pending
+video. See [AK8000 research](AK8000-Research.md) for the current evidence.
 
 ## LLE headless (optional)
 

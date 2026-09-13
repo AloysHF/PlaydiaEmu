@@ -22,7 +22,7 @@ Research-grade but usable for disc playback:
 ## Features
 
 - **CDS-XA Form 2 streaming** — 2352-byte Mode2 sectors, dual-track CUE/BIN
-- **F1/F2/F3 routing** — video fragment assembly, frame end, scene reset, and F2 scene navigation
+- **F1/F2/F3 routing** — video fragments including F2 overflow, F3 padding, and F2 scene navigation
 - **XA ADPCM audio** — 4-bit ADPCM sound groups, 37800/18900 Hz → stereo 44100
 - **320×240 RGB555 framebuffer** — approximate fixed-count AC reconstruction by default; experimental `--full-decode` coefficient scaling. Neither path reproduces original game pixels yet
 - **Save states** — content identity + CRC envelope
@@ -106,6 +106,10 @@ For video packet header frequencies, run
 Add `--video-candidates` to rank packets by low body-byte entropy and long
 `0x55`/`0xAA` runs. The reported track-relative LBAs help target codec research;
 these patterns do not establish decoded pixels or a VLC table.
+Use `--video-rows` to count MSB-first 26-row sequences, ambiguous marker matches,
+and picture terminators in F2 tails. Packet assembly preserves pending video
+across FF-filled F3 sectors. See [AK8000 research](docs/AK8000-Research.md) for
+evidence and remaining decoding gaps; the preview still uses a speculative codec.
 
 ## Testing
 

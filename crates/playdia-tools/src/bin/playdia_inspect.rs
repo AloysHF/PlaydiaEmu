@@ -2,6 +2,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use playdia_core::content::{DiscImage, Track};
 use playdia_core::video::parse_packet_header;
+use playdia_core::video::structure::{
+    is_video_padding, scan_picture_rows, video_fragment, VIDEO_PACKET_CAP,
+};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -18,6 +21,9 @@ struct Cli {
     /// Rank video packets with low byte entropy or long 55/AA byte runs.
     #[arg(long)]
     video_candidates: bool,
+    /// Scan MSB-first row sequences and padding-anchored picture terminators.
+    #[arg(long)]
+    video_rows: bool,
 }
 
 fn main() -> Result<()> {
@@ -62,8 +68,8 @@ fn main() -> Result<()> {
             "stream_track={} f1={} f2={} f3={} audio={}",
             t.number, f1, f2, f3, aud
         );
-        if cli.video_headers || cli.video_candidates {
-            inspect_video_headers(t, cli.video_candidates);
+        if cli.video_headers || cli.video_candidates || cli.video_rows {
+            inspect_video_headers(t, cli.video_candidates, cli.video_rows);
         }
     }
     Ok(())
@@ -74,7 +80,7 @@ struct VideoCandidate {
     index: u64,
     first_lba: usize,
     length: usize,
-    segment_code: u8,
+    raw_byte38: u8,
     entropy: f64,
     alternating_byte_run: usize,
 }
@@ -113,7 +119,7 @@ fn longest_alternating_byte_run(data: &[u8]) -> usize {
     longest
 }
 
-fn inspect_video_headers(track: &Track, show_candidates: bool) {
+fn inspect_video_headers(track: &Track, show_candidates: bool, show_rows: bool) {
     let mut packet = Vec::new();
     let mut first_lba = 0usize;
     let mut overflow = false;
@@ -124,36 +130,55 @@ fn inspect_video_headers(track: &Track, show_candidates: bool) {
     let mut lengths = BTreeMap::<usize, u64>::new();
     let mut lowest_entropy = Vec::<VideoCandidate>::new();
     let mut longest_runs = Vec::<VideoCandidate>::new();
+    let mut row_sequences = 0u64;
+    let mut ambiguous_sequences = 0u64;
+    let mut f2_terminators = 0u64;
+    let mut padding_sectors = 0u64;
+    let mut padding_with_video = 0u64;
     for (lba, raw) in track.data.as_chunks::<2352>().0.iter().enumerate() {
         if raw[15] != 2 || raw[16] != 1 || raw[17] != 0 || raw[18] & 0x08 == 0 {
             continue;
         }
         match raw[24] {
-            0xF1 if packet.len() + 2047 <= 256 * 1024 => {
+            0xF1 if packet.len() + 2047 <= VIDEO_PACKET_CAP && !overflow => {
                 if packet.is_empty() {
                     first_lba = lba;
                 }
-                packet.extend_from_slice(&raw[25..24 + 2048]);
+                packet.extend_from_slice(video_fragment(&raw[24..24 + 2048]));
             }
             0xF1 => overflow = true,
             0xF2 if raw[18] & 1 == 0 => {
                 if !packet.is_empty() || overflow {
                     packets += 1;
+                    let f1_bits = packet.len() * 8;
+                    let tail = video_fragment(&raw[24..24 + 2048]);
+                    if packet.len() + tail.len() <= VIDEO_PACKET_CAP && !overflow {
+                        packet.extend_from_slice(tail);
+                    } else {
+                        overflow = true;
+                    }
                     if !overflow {
+                        if show_rows {
+                            if let Some(rows) = scan_picture_rows(&packet) {
+                                row_sequences += 1;
+                                ambiguous_sequences += u64::from(rows.ambiguous_rows != 0);
+                                f2_terminators += u64::from(rows.terminator_bit + 14 > f1_bits);
+                            }
+                        }
                         let len = packet.iter().rposition(|&b| b != 0xFF).map_or(0, |p| p + 1);
                         *lengths.entry(len).or_default() += 1;
                         if let Some(header) = parse_packet_header(&packet) {
                             valid += 1;
                             identical_quantizers +=
                                 u64::from(header.quant_luma == header.quant_chroma);
-                            *codes.entry(header.segment_code).or_default() += 1;
+                            *codes.entry(header.raw_row_prefix[2]).or_default() += 1;
                             if show_candidates && len > 40 + 256 {
                                 let body = &packet[40..len];
                                 let candidate = VideoCandidate {
                                     index: packets,
                                     first_lba,
                                     length: len,
-                                    segment_code: header.segment_code,
+                                    raw_byte38: header.raw_row_prefix[2],
                                     entropy: body_entropy(body),
                                     alternating_byte_run: longest_alternating_byte_run(body),
                                 };
@@ -172,6 +197,10 @@ fn inspect_video_headers(track: &Track, show_candidates: bool) {
                     overflow = false;
                 }
             }
+            0xF3 if is_video_padding(&raw[24..24 + 2048]) => {
+                padding_sectors += 1;
+                padding_with_video += u64::from(!packet.is_empty());
+            }
             0xF3 => {
                 packet.clear();
                 overflow = false;
@@ -183,10 +212,17 @@ fn inspect_video_headers(track: &Track, show_candidates: bool) {
         "video_packets={} valid_headers={} matching_quantizers={}",
         packets, valid, identical_quantizers
     );
+    if show_rows {
+        println!("video_row_sequences={row_sequences} ambiguous_sequences={ambiguous_sequences} terminators_in_f2={f2_terminators}");
+        println!("video_padding_sectors={padding_sectors} padding_with_pending_video={padding_with_video}");
+        println!(
+            "Row markers are structural candidates; entropy and original pixels are not validated."
+        );
+    }
     let mut common_codes: Vec<_> = codes.into_iter().collect();
     common_codes.sort_by_key(|&(code, count)| (std::cmp::Reverse(count), code));
     for (code, count) in common_codes.into_iter().take(10) {
-        println!("video_segment_code={code:02x} packets={count}");
+        println!("video_raw_byte38={code:02x} packets={count}");
     }
     let mut common_lengths: Vec<_> = lengths.into_iter().collect();
     common_lengths.sort_by_key(|&(length, count)| (std::cmp::Reverse(count), length));
@@ -196,22 +232,22 @@ fn inspect_video_headers(track: &Track, show_candidates: bool) {
     if show_candidates {
         for candidate in lowest_entropy {
             println!(
-                "low_entropy_packet={} track_lba={} bytes={} code={:02x} entropy={:.3} alternating_run={}",
+                "low_entropy_packet={} track_lba={} bytes={} raw_byte38={:02x} entropy={:.3} alternating_run={}",
                 candidate.index,
                 candidate.first_lba,
                 candidate.length,
-                candidate.segment_code,
+                candidate.raw_byte38,
                 candidate.entropy,
                 candidate.alternating_byte_run
             );
         }
         for candidate in longest_runs {
             println!(
-                "long_alternating_run_packet={} track_lba={} bytes={} code={:02x} entropy={:.3} alternating_run={}",
+                "long_alternating_run_packet={} track_lba={} bytes={} raw_byte38={:02x} entropy={:.3} alternating_run={}",
                 candidate.index,
                 candidate.first_lba,
                 candidate.length,
-                candidate.segment_code,
+                candidate.raw_byte38,
                 candidate.entropy,
                 candidate.alternating_byte_run
             );

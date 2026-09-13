@@ -46,8 +46,9 @@ Native rate 37800 Hz or 18900 Hz (coding bit2); resampled to 44100 stereo.
 Payload[0]:
 
 - `0xF1` — append payload[1..] to frame accumulator
-- `0xF2` — end of frame (decode if acc starts `00 80 04`) or interactive cmd
-- `0xF3` — reset accumulator
+- `0xF2` — append payload[0x23..0x800] and end the packet, or interactive command
+- `0xF3` — preserve pending video for 2048-byte sectors whose bytes[3..] are FF;
+  other F3 forms retain the legacy reset behavior pending further evidence
 
 Interactive F2 sectors (`submode` bit 0 set) contain a command byte followed by
 seven four-byte button destinations. Each destination stores binary minute,
@@ -59,14 +60,22 @@ remain under investigation.
 A complete frame packet typically starts with `00 80 04` (quant scale +
 qtables), then F1 fragments, then F2 end.
 
-The first 40 bytes contain a quant scale, two 16-byte quantizer tables, and a
-secondary `00 80 XX` marker with a following flag byte. The secondary code is
-not always `0x24`; other values appear on real discs. Its meaning and the
-number of display pictures represented by each packet remain unverified.
+The picture header is 36 bytes: a 19-bit picture start code (0x400), 3-bit
+picture type, 2-bit quantizer shift, 8-bit factor and two 16-byte tables.
+MSB-first row markers follow: 14-bit 0x20 and a 5-bit row number (1..26).
+Consequently bytes 38 and 39 span the row number and entropy data; the previous
+independent "segment code" and "flags" interpretation was incorrect.
+The inspector now labels byte 38 as raw data. It anchors the 14-bit 0x21
+terminator to final zero bits and FF padding, since that pattern also occurs
+inside entropy. Ordered row marker matches can still be ambiguous.
 
 ## Video path (approximate)
 
-The decoder is a proprietary MPEG-1-like DCT path targeting 320×240 RGB555.
+The display is 320×240 RGB555. The legacy preview uses a speculative 8×8 DCT
+path and does not implement the observed row format. An Asahi patent provides
+a much stronger 4×4 transform / 248×208 picture hypothesis, but its Huffman
+table and pixel reconstruction are not yet recovered; see
+[AK8000 research](AK8000-Research.md).
 The current default reads a fixed number of raw AC coefficients per block;
 `--full-decode` applies experimental quantization scaling. Pixel-accurate
 AK8000 VLC is still unsolved — treat
@@ -77,8 +86,8 @@ remain unverified.
 An independent survey of 35 data-track discs found the expected initial packet
 prefix in all 900,268 assembled video packets; it did not validate picture decode.
 The experimental decoder's `lsb_first` parameter now selects the actual entropy
-byte bit order. Its default preserves the previous LSB-first behavior; neither
-bit order has been validated against exact hardware pixels.
+byte bit order. Its default preserves the previous LSB-first preview behavior;
+the separate picture structure scanner uses the observed MSB-first framing.
 
 ## Memory map (LLE / hardware access dump)
 
@@ -101,6 +110,6 @@ Mode 2 sectors:
 - channel 0 + submode bit3 `0x08` → data markers in payload[0]:
   - `0xF1` video fragment
   - `0xF2` frame end (submode bit0 clear) or interactive command (bit0 set)
-  - `0xF3` scene reset
+  - `0xF3` FF-filled padding (other forms retain legacy reset handling)
 
 PID/subheader conventions seen on real discs: `0x61` video, `0x62` audio.

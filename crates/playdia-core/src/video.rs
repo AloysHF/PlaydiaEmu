@@ -1,26 +1,26 @@
 //! Playdia CDXA video decoder (HLE).
 //!
-//! Packet prefix confirmed on Redump titles:
-//! `00 80 04 | QS | qtable[16]×2 | 00 80 <segment code> | body`
+//! Picture headers occupy 36 bytes; MSB-first row markers follow at bit 288.
 //!
 //! The entropy decoder is experimental and does not reproduce original pixels.
 
 use crate::bitstream::BitReader;
 use crate::cd::XaPacket;
+pub mod structure;
+use structure::{video_fragment, VIDEO_PACKET_CAP};
 
 pub const WIDTH: usize = 320;
 pub const HEIGHT: usize = 240;
 pub const ENC_W: usize = 192;
 pub const ENC_H: usize = 144;
-const ACC_CAP: usize = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VideoPacketHeader {
     pub qscale: u8,
     pub quant_luma: [u8; 16],
     pub quant_chroma: [u8; 16],
-    pub segment_code: u8,
-    pub flags: u8,
+    /// Raw bytes spanning the first row marker and entropy data, not flags.
+    pub raw_row_prefix: [u8; 4],
 }
 
 pub fn parse_packet_header(buf: &[u8]) -> Option<VideoPacketHeader> {
@@ -35,8 +35,7 @@ pub fn parse_packet_header(buf: &[u8]) -> Option<VideoPacketHeader> {
         qscale: buf[3],
         quant_luma,
         quant_chroma,
-        segment_code: buf[38],
-        flags: buf[39],
+        raw_row_prefix: buf[36..40].try_into().ok()?,
     })
 }
 
@@ -47,7 +46,7 @@ pub enum FrameKind {
     Progressive,
 }
 
-/// Tunable decode profile (defaults = reverse-engineered working set).
+/// Legacy speculative 8x8 decode profile; not the observed row format.
 #[derive(Debug, Clone, Copy)]
 pub struct CodecParams {
     pub width: usize,
@@ -73,7 +72,7 @@ impl Default for CodecParams {
         Self {
             width: ENC_W,
             height: ENC_H,
-            // After 00 80 24 start-code (WizzardSK: body ~byte 40-44).
+            // Legacy byte offset retained only for the speculative preview.
             bs_offset: 40,
             dc_mode_accum: true,
             dc_scale: 8,
@@ -134,6 +133,7 @@ pub struct VideoDecoder {
     pub last_packet_len: usize,
     pub acc: Vec<u8>,
     pub acc_sectors: u32,
+    acc_overflow: bool,
     pub last_qs: u8,
     pub last_qtable: [u8; 16],
     pub params: CodecParams,
@@ -161,6 +161,7 @@ impl VideoDecoder {
             last_packet_len: 0,
             acc: Vec::new(),
             acc_sectors: 0,
+            acc_overflow: false,
             last_qs: 0,
             last_qtable: [0; 16],
             params: CodecParams::default(),
@@ -182,26 +183,38 @@ impl VideoDecoder {
         match packet {
             XaPacket::Video { data, .. } => {
                 self.bytes_ingested += data.len() as u64;
-                if data.len() > 1 {
-                    let chunk = &data[1..];
-                    if self.acc.len() + chunk.len() <= ACC_CAP {
+                let chunk = video_fragment(data);
+                if !chunk.is_empty() {
+                    if self.acc.len() + chunk.len() <= VIDEO_PACKET_CAP && !self.acc_overflow {
                         self.acc.extend_from_slice(chunk);
                         self.acc_sectors += 1;
+                    } else {
+                        self.acc_overflow = true;
                     }
                 }
             }
-            XaPacket::FrameEnd { .. } => {
+            XaPacket::FrameEnd { data, .. } => {
+                if !self.acc.is_empty() {
+                    let tail = video_fragment(data);
+                    if self.acc.len() + tail.len() <= VIDEO_PACKET_CAP {
+                        self.acc.extend_from_slice(tail);
+                        self.bytes_ingested += tail.len() as u64;
+                    } else {
+                        self.acc_overflow = true;
+                    }
+                }
                 let starts = self.acc.len() >= 4
                     && self.acc[0] == 0x00
                     && self.acc[1] == 0x80
                     && self.acc[2] == 0x04;
-                if starts && self.acc.len() >= 44 {
+                if starts && self.acc.len() >= 44 && !self.acc_overflow {
                     self.decode_accumulated();
                 } else if !self.acc.is_empty() {
                     self.frames_failed += 1;
                 }
                 self.acc.clear();
                 self.acc_sectors = 0;
+                self.acc_overflow = false;
             }
             XaPacket::SceneReset { .. } => {
                 self.discard_pending();
@@ -216,6 +229,7 @@ impl VideoDecoder {
     pub fn discard_pending(&mut self) {
         self.acc.clear();
         self.acc_sectors = 0;
+        self.acc_overflow = false;
         self.pending.clear();
     }
 
