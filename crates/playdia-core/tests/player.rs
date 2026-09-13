@@ -136,3 +136,28 @@ fn interactive_choice_pauses_and_seeks_on_button_edge() {
     assert!(!player.is_waiting_for_input());
     assert_eq!(player.track_index, 178);
 }
+
+#[test]
+fn interactive_video_is_finished_and_presented_before_control() {
+    for command in [0x44, 0x80] {
+        let mut disc = interactive_disc(command);
+        let raw = &mut disc.tracks[1].data;
+        let f1 = &mut raw[24..2072];
+        f1.fill(0x55);
+        f1[0..5].copy_from_slice(&[0xF1, 0, 0x80, 4, 8]);
+        f1[5..37].fill(8);
+        f1[37..40].copy_from_slice(&[0, 0x80, 0x24]);
+        raw[2352 + 24 + 0x23..2352 + 2072].fill(0x55);
+        let mut player = DiscPlayer::new();
+        player.disc = Some(disc);
+        // Keep the synthetic preview small enough for one F1/F2 pair.
+        player.video.params.ac_count = 0;
+        player.run_frame();
+        assert_eq!(player.video.last_packet_len, 2047 + 2013);
+        assert!(player.video.acc.is_empty());
+        assert_eq!(player.video.frames_decoded, 1);
+        assert!(!player.video.present_next());
+        assert_eq!(player.is_waiting_for_input(), command == 0x44);
+        assert_eq!(player.demux.interactive_cmds, 1);
+    }
+}

@@ -11,7 +11,7 @@ ships an SH-1 LLE shell for future firmware experiments.
 Research-grade but usable for disc playback:
 
 - **HLE disc player (recommended)** — dual-track MODE2 CUE/BIN streaming, F1/F2/F3 video markers, XA ADPCM audio
-- **Interactive stream control** — F2 jumps and button choices seek within the stream track; unsupported command details remain under investigation
+- **Interactive stream control** — finish embedded video before F2 jumps or button choices; unsupported command details remain under investigation
 - **Video** — proprietary MPEG-1-like DCT path to 320×240 RGB555 (approximate until AK8000 VLC is locked)
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
@@ -110,6 +110,9 @@ Use `--video-rows` to count MSB-first 26-row sequences, ambiguous marker matches
 and picture terminators in F2 tails. Packet assembly preserves pending video
 across FF-filled F3 sectors. See [AK8000 research](docs/AK8000-Research.md) for
 evidence and remaining decoding gaps; the preview still uses a speculative codec.
+`python tools/probe_sparse_vlc.py path\to\track.bin` checks a conservative partial
+codeword grammar on short rows; it also accepts a ZIP containing Track 2.
+Its counts are research diagnostics, not decoded coefficients or game pixels.
 
 ## Testing
 

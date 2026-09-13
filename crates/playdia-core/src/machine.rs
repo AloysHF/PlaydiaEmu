@@ -196,6 +196,11 @@ impl Machine {
                     self.cdx.mark_audio_block();
                 }
                 XaPacket::Interactive { .. } => {
+                    let had_video = !self.video.acc.is_empty();
+                    self.video.ingest_packet(&pkt);
+                    if had_video {
+                        self.cdx.mark_video_frame();
+                    }
                     self.diag.note("xa_interactive");
                 }
                 XaPacket::Other { .. } => {}

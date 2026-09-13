@@ -284,6 +284,8 @@ impl DiscPlayer {
                 self.audio.ingest(&audio_pkt);
             }
             XaPacket::Interactive { lba, data } => {
+                self.video.ingest_packet(&pkt);
+                self.video.present_latest();
                 self.interactive.push((*lba, data.clone()));
                 return self.apply_interactive(*lba, data);
             }

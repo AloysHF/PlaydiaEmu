@@ -133,6 +133,8 @@ fn inspect_video_headers(track: &Track, show_candidates: bool, show_rows: bool) 
     let mut row_sequences = 0u64;
     let mut ambiguous_sequences = 0u64;
     let mut f2_terminators = 0u64;
+    let mut interactive_packets = 0u64;
+    let mut interactive_terminators = 0u64;
     let mut padding_sectors = 0u64;
     let mut padding_with_video = 0u64;
     for (lba, raw) in track.data.as_chunks::<2352>().0.iter().enumerate() {
@@ -147,9 +149,10 @@ fn inspect_video_headers(track: &Track, show_candidates: bool, show_rows: bool) 
                 packet.extend_from_slice(video_fragment(&raw[24..24 + 2048]));
             }
             0xF1 => overflow = true,
-            0xF2 if raw[18] & 1 == 0 => {
+            0xF2 => {
                 if !packet.is_empty() || overflow {
                     packets += 1;
+                    interactive_packets += u64::from(raw[18] & 1 != 0);
                     let f1_bits = packet.len() * 8;
                     let tail = video_fragment(&raw[24..24 + 2048]);
                     if packet.len() + tail.len() <= VIDEO_PACKET_CAP && !overflow {
@@ -163,6 +166,9 @@ fn inspect_video_headers(track: &Track, show_candidates: bool, show_rows: bool) 
                                 row_sequences += 1;
                                 ambiguous_sequences += u64::from(rows.ambiguous_rows != 0);
                                 f2_terminators += u64::from(rows.terminator_bit + 14 > f1_bits);
+                                interactive_terminators += u64::from(
+                                    raw[18] & 1 != 0 && rows.terminator_bit + 14 > f1_bits,
+                                );
                             }
                         }
                         let len = packet.iter().rposition(|&b| b != 0xFF).map_or(0, |p| p + 1);
@@ -215,6 +221,7 @@ fn inspect_video_headers(track: &Track, show_candidates: bool, show_rows: bool) 
     if show_rows {
         println!("video_row_sequences={row_sequences} ambiguous_sequences={ambiguous_sequences} terminators_in_f2={f2_terminators}");
         println!("video_padding_sectors={padding_sectors} padding_with_pending_video={padding_with_video}");
+        println!("interactive_video_packets={interactive_packets} interactive_terminators_in_f2={interactive_terminators}");
         println!(
             "Row markers are structural candidates; entropy and original pixels are not validated."
         );

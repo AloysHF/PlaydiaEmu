@@ -46,7 +46,8 @@ Native rate 37800 Hz or 18900 Hz (coding bit2); resampled to 44100 stereo.
 Payload[0]:
 
 - `0xF1` — append payload[1..] to frame accumulator
-- `0xF2` — append payload[0x23..0x800] and end the packet, or interactive command
+- `0xF2` — append payload[0x23..0x800] and end pending video; submode bit 0
+  additionally selects interactive command handling
 - `0xF3` — preserve pending video for 2048-byte sectors whose bytes[3..] are FF;
   other F3 forms retain the legacy reset behavior pending further evidence
 
@@ -56,6 +57,9 @@ second, frame, and an extra byte; the absolute disc LBA is
 `minute × 4500 + second × 75 + frame − 150`. The HLE player follows known
 scene jumps and button choices within the stream track. Other command effects
 remain under investigation.
+Interactive F2 sectors also carry video tails. The HLE player finishes and
+presents the latest queued preview before handling the control command, so
+waiting for input does not freeze on an earlier queued picture.
 
 A complete frame packet typically starts with `00 80 04` (quant scale +
 qtables), then F1 fragments, then F2 end.

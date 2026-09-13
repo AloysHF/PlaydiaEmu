@@ -193,7 +193,7 @@ impl VideoDecoder {
                     }
                 }
             }
-            XaPacket::FrameEnd { data, .. } => {
+            XaPacket::FrameEnd { data, .. } | XaPacket::Interactive { data, .. } => {
                 if !self.acc.is_empty() {
                     let tail = video_fragment(data);
                     if self.acc.len() + tail.len() <= VIDEO_PACKET_CAP {
@@ -269,6 +269,18 @@ impl VideoDecoder {
     /// Present the next pending frame (call once per host frame).
     pub fn present_next(&mut self) -> bool {
         if let Some(rgb) = self.pending.pop_front() {
+            self.blit_encoded(&rgb);
+            self.frames_decoded += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Present the final queued preview when a control boundary stops playback.
+    pub fn present_latest(&mut self) -> bool {
+        if let Some(rgb) = self.pending.pop_back() {
+            self.pending.clear();
             self.blit_encoded(&rgb);
             self.frames_decoded += 1;
             true
