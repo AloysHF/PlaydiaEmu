@@ -30,9 +30,8 @@ playdia-emu [OPTIONS] DISC
 
 There are no subcommands. With a disc path and no `--headless`, the windowed
 HLE player opens. `--headless` runs the HLE disc player without a window
-(aligned with `spmp8000-emu` / `dingoo-emu`). Pass `--lle` (or any LLE option
-such as `--bios`) to use the SH-1 machine path instead. Disc inspection lives
-in `playdia-tools` (`playdia-inspect`).
+(aligned with `spmp8000-emu` / `dingoo-emu`). Disc inspection lives in
+`playdia-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
@@ -149,34 +148,6 @@ exits unsuccessfully if any picture fails. CUEs and raw MODE2/2352 BIN tracks
 are supported. `--assembled` accepts an already assembled packet for isolated
 debugging. PPM output is 248×216 RGB888. The player and its 320×240 PPM screenshots
 preserve exactly the same channel precision, with a centered black border.
-
-## LLE (optional)
-
-Requires a user-supplied BIOS for retail boot. Prefer the default HLE path for
-disc playback. Select the LLE machine with `--lle` (or by passing any LLE-only
-option such as `--bios`).
-
-```powershell
-cargo run --release -p playdiaemu -- path\to\disc.iso --lle --bios bios.bin --frames 60
-```
-
-### LLE options
-
-| Option | Default | Description |
-|---|---|---|
-| `<DISC>` | *required* | Disc image path |
-| `--lle` | off | Use the LLE machine (SH-1 + bus) instead of the HLE disc player |
-| `--bios PATH` | — | 512 KiB BIOS EPROM |
-| `--frames N` | `60` | Frames to run |
-| `--allow-placeholder-bios` | off | Explicit test mode (refuses silent zero-fill otherwise) |
-| `--audio-test-tone` | off | Emit a test tone instead of disc audio |
-| `--save-state PATH` | — | Write save state after the run |
-| `--load-state PATH` | — | Load save state before the run |
-| `--dump-fb PATH` | — | Dump 320×240 little-endian XRGB8888 words (B, G, R, 0 bytes) |
-
-Save states now use version 2 to preserve eight-bit color channels. Version 1
-RGB555 states are rejected with an unsupported-version error; they are not
-silently interpreted as the new format.
 
 ## Audio Output
 

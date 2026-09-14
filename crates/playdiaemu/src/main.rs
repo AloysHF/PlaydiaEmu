@@ -1,6 +1,5 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use playdia_core::machine::{Machine, MachineConfig, RunStop};
 use playdia_core::player::{DiscPlayer, PlayerStop};
 use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 use rodio::buffer::SamplesBuffer;
@@ -12,7 +11,7 @@ use std::time::{Duration, Instant};
 #[derive(Parser)]
 #[command(
     name = "playdia-emu",
-    about = "Playdia standalone emulator (HLE disc player + LLE shell)",
+    about = "Playdia standalone emulator (HLE disc player)",
     version
 )]
 struct Cli {
@@ -33,7 +32,7 @@ struct Cli {
     /// Run without opening a window
     #[arg(long)]
     headless: bool,
-    /// Number of frames to run (headless defaults: HLE 180, LLE 60; window 0 = until closed)
+    /// Number of frames to run (headless defaults to 180; window 0 = until closed)
     #[arg(long)]
     frames: Option<u32>,
     /// Take a screenshot after N frames and exit (saves as PNG)
@@ -42,7 +41,7 @@ struct Cli {
     /// Number of frames to run before taking screenshot
     #[arg(long = "screenshot-frames", default_value_t = 30)]
     screenshot_frames: u32,
-    /// Dump every Nth decoded frame as PPM into this directory (HLE headless)
+    /// Dump every Nth decoded frame as PPM into this directory (headless)
     #[arg(long)]
     dump_every: Option<u32>,
     /// Directory for periodic dumps (with --dump-every)
@@ -51,63 +50,27 @@ struct Cli {
     /// Compatibility flag; native AK8000 decoding is already enabled
     #[arg(long)]
     full_decode: bool,
-    /// Press a button at a host frame, e.g. --press-at 120:a (HLE headless)
+    /// Press a button at a host frame, e.g. --press-at 120:a (headless)
     #[arg(long = "press-at", value_parser = parse_press_at)]
     press_at: Vec<(u32, InputButtons)>,
-    /// Use the LLE machine (SH-1 + bus) instead of the HLE disc player
-    #[arg(long)]
-    lle: bool,
-    /// Path to a 512 KiB BIOS EPROM (LLE)
-    #[arg(long)]
-    bios: Option<PathBuf>,
-    /// Allow empty placeholder BIOS for LLE experiments
-    #[arg(long)]
-    allow_placeholder_bios: bool,
-    /// Emit a test tone instead of disc audio (LLE)
-    #[arg(long)]
-    audio_test_tone: bool,
-    /// Write save state after the run (LLE)
-    #[arg(long)]
-    save_state: Option<PathBuf>,
-    /// Load save state before the run (LLE)
-    #[arg(long)]
-    load_state: Option<PathBuf>,
-    /// Dump raw 320x240 XRGB8888 framebuffer words (LLE)
-    #[arg(long)]
-    dump_fb: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let cli = Cli::parse();
     let Some(disc) = cli.disc.clone() else {
-        bail!("provide a disc path (optional --headless / --lle)");
+        bail!("provide a disc path (optional --headless)");
     };
 
-    let use_lle = cli.lle
-        || cli.bios.is_some()
-        || cli.allow_placeholder_bios
-        || cli.audio_test_tone
-        || cli.save_state.is_some()
-        || cli.load_state.is_some()
-        || cli.dump_fb.is_some();
     // Screenshot implies headless, matching spmp8000-emu / dingoo-emu.
-    let headless = cli.headless || use_lle || cli.screenshot.is_some();
+    let headless = cli.headless || cli.screenshot.is_some();
     let frames = if cli.screenshot.is_some() && cli.frames.is_none() {
         cli.screenshot_frames
     } else {
-        cli.frames.unwrap_or(if use_lle {
-            60
-        } else if headless {
-            180
-        } else {
-            0
-        })
+        cli.frames.unwrap_or(if headless { 180 } else { 0 })
     };
 
-    if use_lle {
-        run_lle(&disc, frames, &cli)
-    } else if headless {
+    if headless {
         run_hle_headless(
             &disc,
             frames,
@@ -185,65 +148,6 @@ fn run_hle_headless(
     );
     if p.video.frames_decoded == 0 {
         bail!("no video frames decoded (failed={})", p.video.frames_failed);
-    }
-    Ok(())
-}
-
-fn run_lle(disc: &Path, frames: u32, cli: &Cli) -> Result<()> {
-    let cfg = MachineConfig {
-        allow_placeholder_bios: cli.allow_placeholder_bios,
-        enable_xa_stream: true,
-        audio_test_tone: cli.audio_test_tone,
-    };
-    let mut m = Machine::new(cfg);
-    if let Some(bios) = cli.bios.as_deref() {
-        m.load_bios_path(bios).context("load bios")?;
-    } else if !cli.allow_placeholder_bios {
-        bail!("--bios is required unless --allow-placeholder-bios is set");
-    }
-    m.load_disc_path(disc).context("load disc")?;
-    m.reset();
-    if let Some(path) = cli.load_state.as_deref() {
-        let bytes = std::fs::read(path).context("read state")?;
-        m.load_state(&bytes).context("load state")?;
-    }
-    for _ in 0..frames {
-        let stop = m.run_frame();
-        if stop != RunStop::Ok {
-            log::warn!("stop={stop:?} at frame {}", m.frame);
-            break;
-        }
-    }
-    let fb_crc = {
-        let bytes: Vec<u8> = m
-            .framebuffer()
-            .iter()
-            .flat_map(|p| p.to_le_bytes())
-            .collect();
-        playdia_core::state::crc32(&bytes)
-    };
-    let audio = m.drain_audio();
-    println!(
-        "frames={} fb_crc={fb_crc:08x} audio_samples={} cpu_pc={:08x} stopped={:?}",
-        m.frame,
-        audio.len(),
-        m.cpu.pc,
-        m.cpu.stopped
-    );
-    if let Some(path) = cli.screenshot.as_deref() {
-        save_screenshot_png(m.framebuffer(), path)?;
-        println!("wrote {}", path.display());
-    }
-    if let Some(path) = cli.dump_fb.as_deref() {
-        let bytes: Vec<u8> = m
-            .framebuffer()
-            .iter()
-            .flat_map(|p| p.to_le_bytes())
-            .collect();
-        std::fs::write(path, bytes)?;
-    }
-    if let Some(path) = cli.save_state.as_deref() {
-        std::fs::write(path, m.save_state())?;
     }
     Ok(())
 }

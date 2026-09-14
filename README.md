@@ -16,7 +16,7 @@ Research-grade but usable for disc playback:
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
 - **Headless machine** — deterministic `run_frame`, save states, diagnostics
-- **Standalone CLI / window** — window / `--headless` HLE player / `--lle` LLE shell
+- **Standalone CLI / window** — window / `--headless` HLE player
 - **Libretro core** — RetroArch-compatible cdylib shell
 
 ## Features
@@ -45,12 +45,6 @@ Windowed playback:
 
 ```powershell
 cargo run --release -p playdiaemu -- path\to\game.cue
-```
-
-LLE machine path (optional; needs BIOS):
-
-```powershell
-cargo run --release -p playdiaemu -- path\to\disc.iso --lle --bios bios.bin --frames 60
 ```
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
@@ -168,7 +162,7 @@ crates/
 │       └── diagnostics.rs   # Unmapped / unknown / budget counters
 ├── playdiaemu/              # Standalone binary (→ playdia-emu)
 │   └── src/
-│       └── main.rs          # Window + CLI (window / --headless / --lle)
+│       └── main.rs          # Window + CLI (window / --headless)
 ├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
 │   ├── playdiaemu_libretro.info
 │   └── src/lib.rs           # libretro C ABI
