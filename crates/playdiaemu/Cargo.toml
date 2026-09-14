@@ -17,3 +17,4 @@ env_logger = { workspace = true }
 log = { workspace = true }
 minifb = { workspace = true }
 rodio = { workspace = true }
+image = { workspace = true }

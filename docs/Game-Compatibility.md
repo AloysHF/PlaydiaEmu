@@ -38,7 +38,7 @@ Play headlessly and dump a frame:
 ```powershell
 cargo run --release -p playdiaemu -- `
   "tmp/iso/<title>/<title>.cue" `
-  --headless --frames 120 --dump-ppm tmp/out/<title>.ppm
+  --headless --frames 120 -S tmp/out/<title>.png
 ```
 
 Record:

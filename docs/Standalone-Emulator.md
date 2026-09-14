@@ -37,7 +37,7 @@ in `playdia-tools` (`playdia-inspect`).
 ## HLE disc player (recommended, no BIOS)
 
 ```powershell
-cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 --dump-ppm out.ppm
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 -S out.png
 ```
 
 ### HLE options
@@ -47,8 +47,9 @@ cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 --
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
 | `--headless` | off | Run without opening a window |
 | `--frames N` | `180` (headless) | Host frames to run (~8 stream sectors each) |
-| `--dump-ppm PATH` | — | Write final 320×240 PPM |
-| `--dump-every N` | — | Periodic PPM dumps every N frames |
+| `-S, --screenshot PATH` | — | Take a screenshot after N frames and exit (PNG); implies headless |
+| `--screenshot-frames N` | `30` | Frames before the screenshot (used when `--frames` is omitted) |
+| `--dump-every N` | — | Periodic PPM dumps every N decoded frames |
 | `--dump-dir DIR` | `tmp/out` | Directory for periodic dumps |
 | `--full-decode` | off | Compatibility flag; native AK8000 decoding is already the default |
 | `--press-at FRAME:BUTTON` | — | Inject a one-frame press; repeat for multiple inputs. Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start` |
@@ -61,16 +62,22 @@ XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 2
 codes or damaged packets retain the previous frame. Rare VLC entries and
 hardware transform/color rounding still need validation.
 
-Example: `playdia-emu game.cue --headless --frames 180 --press-at 122:a --dump-ppm scene.ppm`.
+Example: `playdia-emu game.cue --headless --frames 180 --press-at 122:a -S scene.png`.
 Frame numbers start at zero. Use a frame after a choice prompt appears; the
 `waiting=true` field in the progress output marks that state.
+
+Screenshot-only (30 frames by default):
+
+```powershell
+playdia-emu game.cue -S preview.png --screenshot-frames 60
+```
 
 Example (private research corpus — do not commit discs):
 
 ```powershell
 cargo run --release -p playdiaemu -- `
   "tmp/iso/Mari-nee no Heya (Japan)/Mari-nee no Heya (Japan).cue" `
-  --headless --frames 90 --dump-ppm tmp/out/mari.ppm
+  --headless --frames 90 -S tmp/out/mari.png
 ```
 
 ## Window frontend
@@ -84,12 +91,13 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | Option | Default | Description |
 |---|---|---|
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
-| `--scale N` | `3` | Window scale factor (native 320×240, clamp 1–8) |
+| `-s, --scale N` | `3` | Window scale factor (native 320×240, clamp 1–8) |
+| `-f, --fullscreen` | off | Borderless fullscreen |
 | `--fps N` | `30` | Target FPS |
+| `-v, --volume N` | `100` | Master audio volume (0–100; `0` disables audio) |
 | `--full-decode` | off | Compatibility flag; native decoding is already enabled |
-| `--mute` | off | Mute host audio |
 | `--frames N` | `0` | Quit after N host frames (`0` = until window closed) |
-| `--dump-ppm PATH` | — | Save PPM when quitting via `--frames` |
+| `-S, --screenshot PATH` | — | Save PNG when quitting via `--frames` |
 
 ### Key mappings
 
@@ -173,7 +181,7 @@ silently interpreted as the new format.
 ## Audio Output
 
 XA ADPCM is decoded and resampled to 44100 Hz stereo. The window frontend
-plays audio through the default host sink; use `--mute` to disable it.
+plays audio through the default host sink; use `-v 0` to disable it.
 
 ## Logging
 

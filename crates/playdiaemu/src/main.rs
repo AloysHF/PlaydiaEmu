@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use playdia_core::machine::{Machine, MachineConfig, RunStop};
 use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::InputButtons;
+use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 use rodio::buffer::SamplesBuffer;
 use rodio::{DeviceSinkBuilder, Player};
 use std::num::NonZero;
@@ -12,29 +12,36 @@ use std::time::{Duration, Instant};
 #[derive(Parser)]
 #[command(
     name = "playdia-emu",
-    about = "Playdia standalone emulator (HLE disc player + LLE shell)"
+    about = "Playdia standalone emulator (HLE disc player + LLE shell)",
+    version
 )]
 struct Cli {
     /// Path to .cue (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
     /// Window scale factor (native is 320x240)
-    #[arg(long, default_value_t = 3)]
+    #[arg(short, long, default_value_t = 3)]
     scale: u32,
+    /// Run in fullscreen mode
+    #[arg(short, long)]
+    fullscreen: bool,
     /// Target FPS for the window frontend
     #[arg(long, default_value_t = 30)]
     fps: u32,
-    /// Mute host audio (window mode)
-    #[arg(long)]
-    mute: bool,
+    /// Master audio volume (0-100)
+    #[arg(short, long, default_value_t = 100, value_parser = clap::value_parser!(u8).range(0..=100))]
+    volume: u8,
     /// Run without opening a window
     #[arg(long)]
     headless: bool,
     /// Number of frames to run (headless defaults: HLE 180, LLE 60; window 0 = until closed)
     #[arg(long)]
     frames: Option<u32>,
-    /// Save final framebuffer as PPM (HLE window/HLE headless)
-    #[arg(long)]
-    dump_ppm: Option<PathBuf>,
+    /// Take a screenshot after N frames and exit (saves as PNG)
+    #[arg(short = 'S', long = "screenshot", value_name = "PATH")]
+    screenshot: Option<PathBuf>,
+    /// Number of frames to run before taking screenshot
+    #[arg(long = "screenshot-frames", default_value_t = 30)]
+    screenshot_frames: u32,
     /// Dump every Nth decoded frame as PPM into this directory (HLE headless)
     #[arg(long)]
     dump_every: Option<u32>,
@@ -84,14 +91,19 @@ fn main() -> Result<()> {
         || cli.save_state.is_some()
         || cli.load_state.is_some()
         || cli.dump_fb.is_some();
-    let headless = cli.headless || use_lle;
-    let frames = cli.frames.unwrap_or(if use_lle {
-        60
-    } else if headless {
-        180
+    // Screenshot implies headless, matching spmp8000-emu / dingoo-emu.
+    let headless = cli.headless || use_lle || cli.screenshot.is_some();
+    let frames = if cli.screenshot.is_some() && cli.frames.is_none() {
+        cli.screenshot_frames
     } else {
-        0
-    });
+        cli.frames.unwrap_or(if use_lle {
+            60
+        } else if headless {
+            180
+        } else {
+            0
+        })
+    };
 
     if use_lle {
         run_lle(&disc, frames, &cli)
@@ -100,21 +112,13 @@ fn main() -> Result<()> {
             &disc,
             frames,
             cli.full_decode,
-            cli.dump_ppm.as_ref(),
+            cli.screenshot.as_deref(),
             cli.dump_every,
             &cli.dump_dir,
             &cli.press_at,
         )
     } else {
-        run_window(
-            &disc,
-            cli.scale,
-            cli.fps,
-            cli.full_decode,
-            cli.mute,
-            frames,
-            cli.dump_ppm.as_ref(),
-        )
+        run_window(&disc, frames, &cli)
     }
 }
 
@@ -122,7 +126,7 @@ fn run_hle_headless(
     disc: &Path,
     frames: u32,
     full_decode: bool,
-    dump_ppm: Option<&PathBuf>,
+    screenshot: Option<&Path>,
     dump_every: Option<u32>,
     dump_dir: &Path,
     press_at: &[(u32, InputButtons)],
@@ -167,8 +171,8 @@ fn run_hle_headless(
             println!("host_frame={} {}", i, p.stats_line());
         }
     }
-    if let Some(path) = dump_ppm {
-        p.video.dump_ppm(path)?;
+    if let Some(path) = screenshot {
+        save_screenshot_png(p.framebuffer(), path)?;
         println!("wrote {}", path.display());
     }
     let audio = p.drain_audio();
@@ -226,6 +230,10 @@ fn run_lle(disc: &Path, frames: u32, cli: &Cli) -> Result<()> {
         m.cpu.pc,
         m.cpu.stopped
     );
+    if let Some(path) = cli.screenshot.as_deref() {
+        save_screenshot_png(m.framebuffer(), path)?;
+        println!("wrote {}", path.display());
+    }
     if let Some(path) = cli.dump_fb.as_deref() {
         let bytes: Vec<u8> = m
             .framebuffer()
@@ -240,46 +248,49 @@ fn run_lle(disc: &Path, frames: u32, cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn run_window(
-    disc: &Path,
-    scale: u32,
-    fps: u32,
-    full_decode: bool,
-    mute: bool,
-    max_frames: u32,
-    dump_ppm: Option<&PathBuf>,
-) -> Result<()> {
+fn run_window(disc: &Path, max_frames: u32, cli: &Cli) -> Result<()> {
     if !disc.exists() {
         bail!("disc not found: {}", disc.display());
     }
 
     log::info!("Loading {}", disc.display());
     let mut player = DiscPlayer::new();
-    if full_decode {
+    if cli.full_decode {
         player.video.params.ac_dequant = 1;
     }
     player.load_path(disc).context("failed to load disc")?;
 
-    let scale = scale.clamp(1, 8) as usize;
+    let scale = cli.scale.clamp(1, 8) as usize;
+    let (window_width, window_height) = if cli.fullscreen {
+        screen_size()
+    } else {
+        (FB_WIDTH * scale, FB_HEIGHT * scale)
+    };
     let mut window = minifb::Window::new(
         "PlaydiaEmu",
-        playdia_core::FB_WIDTH * scale,
-        playdia_core::FB_HEIGHT * scale,
+        window_width,
+        window_height,
         minifb::WindowOptions {
-            resize: true,
+            resize: !cli.fullscreen,
+            borderless: cli.fullscreen,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             ..Default::default()
         },
     )
     .context("failed to create window")?;
-    window.set_target_fps(fps.max(1) as usize);
+    window.set_target_fps(cli.fps.max(1) as usize);
+    if cli.fullscreen {
+        window.topmost(true);
+        window.set_position(0, 0);
+    }
 
-    let audio = if mute {
+    let audio = if cli.volume == 0 {
         None
     } else {
         match DeviceSinkBuilder::open_default_sink() {
             Ok(handle) => {
                 let out = Player::connect_new(handle.mixer());
+                out.set_volume(f32::from(cli.volume) / 100.0);
                 Some((handle, out))
             }
             Err(e) => {
@@ -289,12 +300,13 @@ fn run_window(
         }
     };
 
-    let frame_dt = Duration::from_millis((1000 / fps.max(1)) as u64);
+    let frame_dt = Duration::from_millis((1000 / cli.fps.max(1)) as u64);
     log::info!(
-        "Window {}x{} fps={}  Esc=quit  Arrows/WASD  Z/J=A  X/K=B  Enter=Start  Space=Select",
-        playdia_core::FB_WIDTH * scale,
-        playdia_core::FB_HEIGHT * scale,
-        fps
+        "Window {}x{} fps={} volume={}  Esc=quit  Arrows/WASD  Z/J=A  X/K=B  Enter=Start  Space=Select",
+        window_width,
+        window_height,
+        cli.fps,
+        cli.volume
     );
 
     let mut frames = 0u32;
@@ -304,11 +316,7 @@ fn run_window(
         let stop = player.run_frame();
 
         window
-            .update_with_buffer(
-                player.framebuffer(),
-                playdia_core::FB_WIDTH,
-                playdia_core::FB_HEIGHT,
-            )
+            .update_with_buffer(player.framebuffer(), FB_WIDTH, FB_HEIGHT)
             .context("update window")?;
 
         if let Some((_handle, player_out)) = audio.as_ref() {
@@ -327,8 +335,8 @@ fn run_window(
 
         frames += 1;
         if max_frames > 0 && frames >= max_frames {
-            if let Some(path) = dump_ppm {
-                player.video.dump_ppm(path)?;
+            if let Some(path) = cli.screenshot.as_deref() {
+                save_screenshot_png(player.framebuffer(), path)?;
                 log::info!("wrote {}", path.display());
             }
             break;
@@ -349,6 +357,41 @@ fn run_window(
 
     log::info!("exit {}", player.stats_line());
     Ok(())
+}
+
+fn save_screenshot_png(framebuffer: &[u32], path: &Path) -> Result<()> {
+    let mut img = image::RgbaImage::new(FB_WIDTH as u32, FB_HEIGHT as u32);
+    for (i, &px) in framebuffer.iter().enumerate() {
+        let r = ((px >> 16) & 0xFF) as u8;
+        let g = ((px >> 8) & 0xFF) as u8;
+        let b = (px & 0xFF) as u8;
+        let x = (i % FB_WIDTH) as u32;
+        let y = (i / FB_WIDTH) as u32;
+        img.put_pixel(x, y, image::Rgba([r, g, b, 0xFF]));
+    }
+    img.save(path).context("save screenshot")?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn screen_size() -> (usize, usize) {
+    #[allow(non_snake_case)]
+    extern "system" {
+        fn GetSystemMetrics(index: i32) -> i32;
+    }
+    const SM_CXSCREEN: i32 = 0;
+    const SM_CYSCREEN: i32 = 1;
+    unsafe {
+        (
+            GetSystemMetrics(SM_CXSCREEN) as usize,
+            GetSystemMetrics(SM_CYSCREEN) as usize,
+        )
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn screen_size() -> (usize, usize) {
+    (FB_WIDTH * 4, FB_HEIGHT * 4)
 }
 
 fn key_buttons(window: &minifb::Window) -> InputButtons {
