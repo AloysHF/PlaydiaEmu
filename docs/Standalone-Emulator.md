@@ -57,7 +57,7 @@ The HLE player follows F2 scene jumps and pauses at F2 button choices until a
 mapped button is pressed. CUE/BIN images provide the full-disc addresses needed
 for these jumps. Timeout, score, and quiz behavior is still incomplete.
 The default decoder reconstructs 248×216 game pictures centered in the 320×240
-framebuffer. It validates all 27 rows before presenting a picture. Unknown
+XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 27 rows before presenting a picture. Unknown
 codes or damaged packets retain the previous frame. Rare VLC entries and
 hardware transform/color rounding still need validation.
 
@@ -139,8 +139,8 @@ Indices start at 1 and include interactive F2 pictures. `--check-all` reports
 failed packet indices, track-relative LBAs, rows, blocks and bit offsets, and
 exits unsuccessfully if any picture fails. CUEs and raw MODE2/2352 BIN tracks
 are supported. `--assembled` accepts an already assembled packet for isolated
-debugging. PPM output is native 248×216 RGB888, retaining the reconstructed
-channel precision before the player's RGB555 conversion.
+debugging. PPM output is 248×216 RGB888. The player and its 320×240 PPM screenshots
+preserve exactly the same channel precision, with a centered black border.
 
 ## LLE headless (optional)
 
@@ -161,7 +161,11 @@ cargo run --release -p playdiaemu -- headless path\to\disc.iso --bios bios.bin -
 | `--audio-test-tone` | off | Emit a test tone instead of disc audio |
 | `--save-state PATH` | — | Write save state after the run |
 | `--load-state PATH` | — | Load save state before the run |
-| `--dump-fb PATH` | — | Dump framebuffer |
+| `--dump-fb PATH` | — | Dump 320×240 little-endian XRGB8888 words (B, G, R, 0 bytes) |
+
+Save states now use version 2 to preserve eight-bit color channels. Version 1
+RGB555 states are rejected with an unsupported-version error; they are not
+silently interpreted as the new format.
 
 ## Audio Output
 

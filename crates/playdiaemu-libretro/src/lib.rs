@@ -30,7 +30,7 @@ const RETRO_DEVICE_ID_JOYPAD_X: c_uint = 9;
 const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
 const RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: c_uint = 10;
 const RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME: c_uint = 18;
-const RETRO_PIXEL_FORMAT_0RGB1555: c_int = 0;
+const RETRO_PIXEL_FORMAT_XRGB8888: c_int = 1;
 const RETRO_REGION_NTSC: c_uint = 0;
 
 #[repr(C)]
@@ -209,13 +209,12 @@ pub extern "C" fn retro_run() {
         let Some(m) = guard.as_mut() else { return };
         let _ = m.run_frame();
         let fb = m.framebuffer();
-        let rgb555: Vec<u16> = fb.to_vec();
         if let Some(cb) = unsafe { CALLBACKS.video_refresh } {
             cb(
-                rgb555.as_ptr() as *const c_void,
+                fb.as_ptr() as *const c_void,
                 FB_WIDTH as c_uint,
                 FB_HEIGHT as c_uint,
-                FB_WIDTH * 2,
+                FB_WIDTH * 4,
             );
         }
         let audio = m.drain_audio();
@@ -338,12 +337,15 @@ pub extern "C" fn retro_load_game(game: *const GameInfo) -> bool {
         }
     }
     m.reset();
-    if let Some(env) = unsafe { CALLBACKS.environment } {
-        let mut fmt = RETRO_PIXEL_FORMAT_0RGB1555;
-        env(
-            RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,
-            &mut fmt as *mut c_int as *mut c_void,
-        );
+    let Some(env) = (unsafe { CALLBACKS.environment }) else {
+        return false;
+    };
+    let mut fmt = RETRO_PIXEL_FORMAT_XRGB8888;
+    if !env(
+        RETRO_ENVIRONMENT_SET_PIXEL_FORMAT,
+        &mut fmt as *mut c_int as *mut c_void,
+    ) {
+        return false;
     }
     *CORE.lock().unwrap() = Some(m);
     true
@@ -380,5 +382,54 @@ pub extern "C" fn retro_get_memory_size(id: c_uint) -> usize {
         0
     } else {
         0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static ACCEPT_FORMAT: AtomicBool = AtomicBool::new(false);
+    static VIDEO_SEEN: AtomicBool = AtomicBool::new(false);
+
+    extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
+        if cmd == RETRO_ENVIRONMENT_SET_PIXEL_FORMAT {
+            let format = unsafe { *(data as *const c_int) };
+            return format == 1 && ACCEPT_FORMAT.load(Ordering::SeqCst);
+        }
+        true
+    }
+
+    extern "C" fn video(data: *const c_void, width: c_uint, height: c_uint, pitch: usize) {
+        let pixels =
+            unsafe { std::slice::from_raw_parts(data as *const u32, FB_WIDTH * FB_HEIGHT) };
+        VIDEO_SEEN.store(
+            width == 320
+                && height == 240
+                && pitch == 320 * 4
+                && pixels[0] == 0x0081_8283
+                && pixels[320 * 240 - 1] == 0x0001_FE07,
+            Ordering::SeqCst,
+        );
+    }
+
+    #[test]
+    fn negotiates_xrgb8888_and_preserves_channels_and_pitch() {
+        retro_set_environment(environment);
+        retro_set_video_refresh(video);
+        assert!(!retro_load_game(ptr::null()));
+        assert!(CORE.lock().unwrap().is_none());
+        ACCEPT_FORMAT.store(true, Ordering::SeqCst);
+        assert!(retro_load_game(ptr::null()));
+        {
+            let mut guard = CORE.lock().unwrap();
+            let m = guard.as_mut().unwrap();
+            m.video.framebuffer[0] = 0x0081_8283;
+            m.video.framebuffer[320 * 240 - 1] = 0x0001_FE07;
+        }
+        retro_run();
+        assert!(VIDEO_SEEN.load(Ordering::SeqCst));
+        retro_unload_game();
     }
 }

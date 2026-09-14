@@ -46,11 +46,14 @@ core metadata.
 
 ## Supported Features
 
-- Video output using the 0RGB1555 pixel format (320×240)
+- Video output using XRGB8888 (320×240, eight bits per channel, 1,280-byte row pitch)
 - Stereo audio output at 44100 Hz
 - RetroPad input handling
-- Save states via libretro serialize / unserialize
+- Save states via libretro serialize / unserialize (version 2; version 1 states are rejected)
 - LLE machine path (`Machine`) rather than the standalone HLE `DiscPlayer`
+
+The frontend must accept `RETRO_PIXEL_FORMAT_XRGB8888`; loading fails if it
+rejects the format. No RGB555 fallback reduces the decoded channel precision.
 
 ## RetroPad Button Mapping
 

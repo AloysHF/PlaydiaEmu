@@ -174,6 +174,8 @@ fn save_state_on_machine() {
     let mut m = Machine::new(cfg);
     m.reset();
     let _ = m.run_frame();
+    m.video.framebuffer[0] = 0x0081_8283;
+    m.video.framebuffer[320 * 240 - 1] = 0x0001_FE07;
     let blob = m.save_state();
     let mut m2 = Machine::new(MachineConfig {
         allow_placeholder_bios: true,
@@ -186,6 +188,18 @@ fn save_state_on_machine() {
     m2.load_state(&blob).unwrap();
     assert_eq!(m2.cpu.pc, m.cpu.pc);
     assert_eq!(m2.frame, m.frame);
+    assert_eq!(m2.framebuffer(), m.framebuffer());
+    assert_eq!(m2.video.crc(), m.video.crc());
+
+    // Old two-byte framebuffer states must fail before mutating the machine.
+    let mut old = blob;
+    old[8..10].copy_from_slice(&1u16.to_le_bytes());
+    let before = m2.save_state();
+    assert!(matches!(
+        m2.load_state(&old),
+        Err(playdia_core::state::SaveStateError::BadVersion(1))
+    ));
+    assert_eq!(m2.save_state(), before);
 }
 
 #[test]

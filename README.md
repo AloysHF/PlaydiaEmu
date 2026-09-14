@@ -12,7 +12,7 @@ Research-grade but usable for disc playback:
 
 - **HLE disc player (recommended)** — dual-track MODE2 CUE/BIN streaming, F1/F2/F3 video markers, XA ADPCM audio
 - **Interactive stream control** — finish embedded video before F2 jumps or button choices; unsupported command details remain under investigation
-- **Video** — recovered AK8000 row/VLC decoding produces recognizable 248×216 game pictures in a 320×240 RGB555 framebuffer; hardware pixel accuracy remains unverified
+- **Video** — recovered AK8000 row/VLC decoding produces recognizable 248×216 game pictures in a 320×240 XRGB8888 framebuffer (eight bits per color channel); hardware pixel accuracy remains unverified
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
 - **Headless machine** — deterministic `run_frame`, save states, diagnostics
@@ -25,7 +25,7 @@ Research-grade but usable for disc playback:
 - **F1/F2/F3 routing** — video fragments including F2 overflow, F3 padding, and F2 scene navigation
 - **XA ADPCM audio** — 4-bit ADPCM sound groups, 37800/18900 Hz → stereo 44100
 - **Native game video** — 27 rows of 4×4 transform blocks, run/level coefficients, macroblock DC prediction and separate Y/C quantizers; invalid pictures preserve the previous frame
-- **Save states** — content identity + CRC envelope
+- **Save states** — content identity + CRC envelope; version 2 preserves RGB888 pixels (version 1 states are rejected)
 - **Headless / inspect tooling** — sector and packet diagnostics without a window
 - **RetroArch integration** — libretro core for frontend use
 - **Cross-crate core** — platform-independent `playdia-core` with no host I/O
@@ -122,8 +122,8 @@ cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
 ```
 
 Packet numbers start at 1 and include interactive F2 packets. The frame tool
-exports native 248×216 RGB888 PPMs; the player exports its 320×240 RGB555
-framebuffer. A [37-disc validation run](docs/AK8000-Corpus-Validation.md) passed
+exports 248×216 RGB888 PPMs; the player exports the same RGB888 colors
+centered in 320×240. Neither path reduces channels to five bits. A [37-disc validation run](docs/AK8000-Corpus-Validation.md) passed
 1,135,531 of 1,135,539 picture packets; eight packets end inside their final row.
 This measures entropy coverage, not full game compatibility or hardware pixel accuracy.
 
@@ -176,7 +176,7 @@ crates/
 
 - `load_disc_*` / optional `load_bios_*`
 - `reset`, `run_frame`, `set_input`
-- `framebuffer` → 320×240 RGB555
+- `framebuffer` → 320×240 XRGB8888 (`u32`, `0x00RRGGBB`)
 - `drain_audio` → interleaved stereo i16 @ 44100
 - `save_state` / `load_state` with content identity + CRC
 - diagnostics for unmapped access and unknown opcodes

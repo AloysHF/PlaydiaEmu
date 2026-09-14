@@ -6,14 +6,9 @@ use playdia_core::video::ak8000::{decode, ErrorKind, HEIGHT, WIDTH};
 use playdia_core::video::VideoDecoder;
 use playdia_core::video::{decode_packet_frames, CodecParams};
 
-fn gray(rgb: &[u8], x: usize, y: usize) -> u16 {
-    let offset = (y * WIDTH + x) * 2;
-    u16::from_le_bytes([rgb[offset], rgb[offset + 1]])
-}
-
-fn gray555(value: u16) -> u16 {
-    let channel = value >> 3;
-    channel | (channel << 5) | (channel << 10)
+fn gray(rgb: &[u8], x: usize, y: usize) -> [u8; 3] {
+    let offset = (y * WIDTH + x) * 3;
+    rgb[offset..offset + 3].try_into().unwrap()
 }
 
 #[test]
@@ -32,7 +27,7 @@ fn dc_prediction_uses_the_current_macroblock_first_luma() {
         put(bits, 1, 2);
     });
     let rgb = decode(&packet).unwrap();
-    assert_eq!((WIDTH, HEIGHT, rgb.len()), (248, 216, 248 * 216 * 2));
+    assert_eq!((WIDTH, HEIGHT, rgb.len()), (248, 216, 248 * 216 * 3));
     for (x, y, expected) in [
         (0, 0, 144),
         (4, 0, 152),
@@ -41,9 +36,9 @@ fn dc_prediction_uses_the_current_macroblock_first_luma() {
         (8, 0, 152),
         (12, 0, 152),
     ] {
-        assert_eq!(gray(&rgb, x, y), gray555(expected), "pixel {x},{y}");
+        assert_eq!(gray(&rgb, x, y), [expected; 3], "pixel {x},{y}");
     }
-    assert_eq!(gray(&rgb, 0, 8), gray555(144));
+    assert_eq!(gray(&rgb, 0, 8), [144; 3]);
     let frames = decode_packet_frames(&packet, CodecParams::default());
     assert_eq!(frames.len(), 1);
     assert_eq!(frames[0].1, 27 * 186);
@@ -62,8 +57,8 @@ fn full_blocks_end_without_an_eob_and_negative_escape_is_signed() {
         }
     });
     let rgb = decode(&packet).unwrap();
-    assert_eq!(gray(&rgb, 8, 0), gray555(64));
-    assert_eq!(gray(&rgb, 247, 215), gray555(64));
+    assert_eq!(gray(&rgb, 8, 0), [64; 3]);
+    assert_eq!(gray(&rgb, 247, 215), [64; 3]);
 }
 
 #[test]
@@ -137,7 +132,7 @@ fn invalid_picture_preserves_the_last_presented_frame() {
     }
     assert_eq!((video.frames_decoded, video.frames_failed), (1, 1));
     assert!(!video.present_next());
-    assert_eq!(video.framebuffer[12 * 320 + 36], gray555(128));
+    assert_eq!(video.framebuffer[12 * 320 + 36], 0x0080_8080);
     assert_eq!(video.framebuffer[0], 0);
 }
 
@@ -152,5 +147,71 @@ fn native_export_retains_eight_bit_channels() {
     let rgb = playdia_core::video::ak8000::decode_rgb888(&packet).unwrap();
     assert_eq!(rgb.len(), WIDTH * HEIGHT * 3);
     assert!(rgb.iter().all(|&channel| channel == 131));
-    assert_eq!(gray(&decode(&packet).unwrap(), 0, 0), gray555(128));
+    assert_eq!(gray(&decode(&packet).unwrap(), 0, 0), [131; 3]);
+}
+
+#[test]
+fn playback_cache_and_ppm_preserve_export_colors() {
+    let packet = picture(|_, index, bits| {
+        let delta = match index {
+            0 => 3,
+            4 => 1,
+            5 => 2,
+            _ => 0,
+        };
+        if delta != 0 {
+            escape(bits, 0, delta);
+        }
+        put(bits, 1, 2);
+    });
+    let exported = decode(&packet).unwrap();
+    assert_eq!(&exported[..3], &[133, 130, 132]);
+    let mut video = VideoDecoder::new();
+    for _ in 0..2 {
+        let mut data = vec![0xF1];
+        data.extend_from_slice(&packet);
+        video.ingest_packet(&XaPacket::Video {
+            lba: 0,
+            channel: 0,
+            submode: 8,
+            coding: 0,
+            data,
+        });
+        video.ingest_packet(&XaPacket::FrameEnd {
+            lba: 1,
+            submode: 8,
+            data: vec![0xF2],
+        });
+        assert!(video.present_next());
+        for y in 0..240 {
+            for x in 0..320 {
+                let pixel = video.framebuffer[y * 320 + x];
+                if (36..284).contains(&x) && (12..228).contains(&y) {
+                    let i = ((y - 12) * WIDTH + x - 36) * 3;
+                    let (r, g, b) = playdia_core::video::unpack_rgb888(pixel);
+                    assert_eq!(&[r, g, b], &exported[i..i + 3]);
+                } else {
+                    assert_eq!(pixel, 0);
+                }
+            }
+        }
+    }
+    assert_eq!(video.frames_decoded, 2);
+    let path = std::env::temp_dir().join(format!("playdia-rgb888-{}.ppm", std::process::id()));
+    video.dump_ppm(&path).unwrap();
+    let ppm = std::fs::read(&path).unwrap();
+    std::fs::remove_file(path).unwrap();
+    let header = b"P6\n320 240\n255\n";
+    assert!(ppm.starts_with(header));
+    assert_eq!(ppm.len(), header.len() + 320 * 240 * 3);
+    for y in 0..HEIGHT {
+        let start = header.len() + ((y + 12) * 320 + 36) * 3;
+        assert_eq!(
+            &ppm[start..start + WIDTH * 3],
+            &exported[y * WIDTH * 3..(y + 1) * WIDTH * 3]
+        );
+    }
+    let raw = video.framebuffer_bytes();
+    let start = (12 * 320 + 36) * 4;
+    assert_eq!(&raw[start..start + 4], &[132, 130, 133, 0]);
 }

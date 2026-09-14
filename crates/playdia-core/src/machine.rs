@@ -208,7 +208,7 @@ impl Machine {
         }
     }
 
-    pub fn framebuffer(&self) -> &[u16] {
+    pub fn framebuffer(&self) -> &[u32] {
         &self.video.framebuffer
     }
 
@@ -290,7 +290,7 @@ impl Machine {
         self.cdx.shared.copy_from_slice(shared);
         let fb_len = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap()) as usize;
         for px in self.video.framebuffer.iter_mut().take(fb_len) {
-            *px = u16::from_le_bytes(take(&mut o, 2)?.try_into().unwrap());
+            *px = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap()) & 0x00FF_FFFF;
         }
         self.video.frames_decoded = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
         self.frame = frame;

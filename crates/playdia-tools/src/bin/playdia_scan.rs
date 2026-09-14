@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use playdia_core::player::DiscPlayer;
-use playdia_core::video::{rgb555_to_rgb888, CodecParams, VideoDecoder};
+use playdia_core::video::{pack_rgb888, unpack_rgb888, CodecParams, VideoDecoder};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -106,13 +106,13 @@ fn resize_to_192x144(src: &[f32], sw: usize, sh: usize) -> Vec<f32> {
     out
 }
 
-fn fb_luma_center(fb: &[u16]) -> Vec<f32> {
+fn fb_luma_center(fb: &[u32]) -> Vec<f32> {
     let (ox, oy) = ((320 - 192) / 2, (240 - 144) / 2);
     let mut g = vec![0f32; 192 * 144];
     for y in 0..144 {
         for x in 0..192 {
             let px = fb[(oy + y) * 320 + (ox + x)];
-            let (r, gr, b) = rgb555_to_rgb888(px);
+            let (r, gr, b) = unpack_rgb888(px);
             g[y * 192 + x] = 0.299 * r as f32 + 0.587 * gr as f32 + 0.114 * b as f32;
         }
     }
@@ -154,8 +154,8 @@ fn score_packet(pkt: &[u8], p: CodecParams, ref192: &[f32]) -> f32 {
             dec.framebuffer.fill(0);
             for y in 0..144 {
                 for x in 0..192 {
-                    let i = (y * 192 + x) * 2;
-                    let px = u16::from_le_bytes([rgb[i], rgb[i + 1]]);
+                    let i = (y * 192 + x) * 3;
+                    let px = pack_rgb888(rgb[i], rgb[i + 1], rgb[i + 2]);
                     dec.framebuffer[(oy + y) * 320 + (ox + x)] = px;
                 }
             }
@@ -304,8 +304,8 @@ fn main() -> Result<()> {
             let (ox, oy) = ((320 - 192) / 2, (240 - 144) / 2);
             for y in 0..144 {
                 for x in 0..192 {
-                    let i = (y * 192 + x) * 2;
-                    let px = u16::from_le_bytes([rgb[i], rgb[i + 1]]);
+                    let i = (y * 192 + x) * 3;
+                    let px = pack_rgb888(rgb[i], rgb[i + 1], rgb[i + 2]);
                     dec.framebuffer[(oy + y) * 320 + (ox + x)] = px;
                 }
             }

@@ -46,10 +46,21 @@ cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 52
 cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
 ```
 
-The frame tool exports native 248×216 RGB888 pixels. Normal playback centers them in
-320×240 and only presents a picture after all rows and padding validate.
+The frame tool exports 248×216 RGB888 pixels. Normal playback centers them in
+320×240 and only presents a picture after all rows and padding validate. Since
+2026-09-14, playback also retains all eight channel bits in an XRGB8888
+framebuffer; the earlier RGB555 intermediate has been removed. RGB888 is the
+software reconstruction format, not a verified hardware precision claim.
 Decode failures retain the previous picture. The old 8×8 preview remains an
 explicit research-only `CodecParams::legacy_preview` option.
+
+The RGB888 unification was checked with Sample Soft menu/demo and Dragon Ball Z
+packets rewrapped into local test sectors. Cropping the player's 320×240 PPM to
+the 248×216 content gives byte-identical pixels to both the current frame tool
+and its previous RGB888 exports. A complete-disc Mari-nee opening run still
+presents 103 pictures with zero failures and reaches the button-choice screen.
+Synthetic tests additionally cover cached presentation, PPM channel order,
+state precision/version rejection, and libretro format negotiation and pitch.
 
 Synthetic tests cover macroblock prediction, signed escapes, implicit block
 ends, truncated packets, coefficient overflow and video in interactive F2

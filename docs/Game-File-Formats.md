@@ -76,7 +76,7 @@ inside entropy. Ordered row marker matches can still be ambiguous.
 ## Video path (recovered syntax)
 
 The default decoder reads one 248×216 picture per assembled packet and centers
-it in the 320×240 RGB555 framebuffer. Each of 27 rows contains 31 macroblocks
+it in the 320×240 XRGB8888 framebuffer. Each of 27 rows contains 31 macroblocks
 of four luma and two chroma 4×4 blocks. Entropy uses signed run/level VLCs,
 `01` EOB and a six-bit `001000` escape with four run bits and ten signed level
 bits. A block filled through coefficient 15 ends without another EOB.
@@ -88,8 +88,14 @@ fixed-point 4×4 inverse DCT, followed by YCbCr conversion. Separate luma and
 chroma tables are retained. Rare VLCs, nonlinear quantization, hardware
 transform rounding and analog color conversion remain research questions.
 See [AK8000 research](AK8000-Research.md) for evidence and limitations.
-`playdia-frame` exports RGB888 before framebuffer quantization; normal
-playback retains the shared RGB555 framebuffer contract.
+`playdia-frame`, playback and PPM screenshots retain the same eight-bit RGB
+channels. Decoded packets contain packed R/G/B bytes; framebuffers use `u32`
+words in `0x00RRGGBB` order. This software output format does not establish
+the original hardware color precision.
+
+Raw framebuffer dumps and framebuffer CRCs use four little-endian bytes per
+pixel (B, G, R, 0), totaling 307,200 bytes for 320×240. Save-state version 2
+stores this format; version 1 RGB555 states are rejected before loading.
 
 The earlier 26-row assumption merged rows 26 and 27. Counting 186 literal
 EOBs was also insufficient because full blocks omit EOB. The native path

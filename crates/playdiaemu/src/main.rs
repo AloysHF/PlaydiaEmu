@@ -360,9 +360,12 @@ fn run_window(
         player.set_input(key_buttons(&window));
         let stop = player.run_frame();
 
-        let buf = rgb555_to_u32(player.framebuffer());
         window
-            .update_with_buffer(&buf, playdia_core::FB_WIDTH, playdia_core::FB_HEIGHT)
+            .update_with_buffer(
+                player.framebuffer(),
+                playdia_core::FB_WIDTH,
+                playdia_core::FB_HEIGHT,
+            )
             .context("update window")?;
 
         if let Some((_handle, player_out)) = audio.as_ref() {
@@ -416,20 +419,6 @@ fn key_buttons(window: &minifb::Window) -> InputButtons {
         start: window.is_key_down(minifb::Key::Enter),
         select: window.is_key_down(minifb::Key::Space),
     }
-}
-
-fn rgb555_to_u32(fb: &[u16]) -> Vec<u32> {
-    fb.iter()
-        .map(|p| {
-            let r = (p & 0x1F) as u32;
-            let g = ((p >> 5) & 0x1F) as u32;
-            let b = ((p >> 10) & 0x1F) as u32;
-            let r8 = (r << 3) | (r >> 2);
-            let g8 = (g << 3) | (g >> 2);
-            let b8 = (b << 3) | (b >> 2);
-            (r8 << 16) | (g8 << 8) | b8
-        })
-        .collect()
 }
 
 fn parse_press_at(value: &str) -> Result<(u32, InputButtons), String> {

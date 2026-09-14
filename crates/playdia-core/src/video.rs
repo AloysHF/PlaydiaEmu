@@ -130,7 +130,8 @@ const COS: [[i32; 8]; 8] = [
 
 #[derive(Debug, Clone)]
 pub struct VideoDecoder {
-    pub framebuffer: Vec<u16>,
+    /// RGB888 pixels stored as native u32 words in 0x00RRGGBB order.
+    pub framebuffer: Vec<u32>,
     pub frames_decoded: u64,
     pub frames_failed: u64,
     pub bytes_ingested: u64,
@@ -300,8 +301,8 @@ impl VideoDecoder {
 
     fn blit_encoded(&mut self, rgb: &[u8]) {
         let (width, height) = match rgb.len() {
-            n if n == ak8000::WIDTH * ak8000::HEIGHT * 2 => (ak8000::WIDTH, ak8000::HEIGHT),
-            n if n == ENC_W * ENC_H * 2 => (ENC_W, ENC_H),
+            n if n == ak8000::WIDTH * ak8000::HEIGHT * 3 => (ak8000::WIDTH, ak8000::HEIGHT),
+            n if n == ENC_W * ENC_H * 3 => (ENC_W, ENC_H),
             _ => return,
         };
         self.framebuffer.fill(0);
@@ -309,15 +310,16 @@ impl VideoDecoder {
         let oy = (HEIGHT - height) / 2;
         for y in 0..height {
             for x in 0..width {
-                let i = (y * width + x) * 2;
-                let px = u16::from_le_bytes([rgb[i], rgb[i + 1]]);
+                let i = (y * width + x) * 3;
+                let px = pack_rgb888(rgb[i], rgb[i + 1], rgb[i + 2]);
                 self.framebuffer[(oy + y) * WIDTH + (ox + x)] = px;
             }
         }
     }
 
+    /// Serialize XRGB8888 words in little-endian order for dumps and CRCs.
     pub fn framebuffer_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(self.framebuffer.len() * 2);
+        let mut out = Vec::with_capacity(self.framebuffer.len() * 4);
         for px in &self.framebuffer {
             out.extend_from_slice(&px.to_le_bytes());
         }
@@ -329,7 +331,7 @@ impl VideoDecoder {
         let mut f = std::fs::File::create(path)?;
         write!(f, "P6\n{WIDTH} {HEIGHT}\n255\n")?;
         for px in &self.framebuffer {
-            let (r, g, b) = rgb555_to_rgb888(*px);
+            let (r, g, b) = unpack_rgb888(*px);
             f.write_all(&[r, g, b])?;
         }
         Ok(())
@@ -367,14 +369,12 @@ fn idct_block(coeff: &[i32; 64], out: &mut [u8; 64], level_shift: i32, scan: &[u
     }
 }
 
-fn rgb888_to_555(r: u8, g: u8, b: u8) -> u16 {
-    let r5 = (r >> 3) as u16;
-    let g5 = (g >> 3) as u16;
-    let b5 = (b >> 3) as u16;
-    r5 | (g5 << 5) | (b5 << 10)
+/// Pack eight-bit channels as 0x00RRGGBB without quantization.
+pub fn pack_rgb888(r: u8, g: u8, b: u8) -> u32 {
+    (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
 }
 
-/// Attempt to decode pictures from one assembled F1 packet.
+/// Decode pictures to packed R, G, B bytes from one assembled F1 packet.
 pub fn decode_packet_frames(buf: &[u8], p: CodecParams) -> Vec<(Vec<u8>, usize)> {
     if !p.legacy_preview {
         return ak8000::decode(buf)
@@ -551,7 +551,7 @@ fn blit_block(
 }
 
 fn compose(y: &[u8], cb: &[u8], cr: &[u8]) -> Vec<u8> {
-    let mut out = vec![0u8; ENC_W * ENC_H * 2];
+    let mut out = vec![0u8; ENC_W * ENC_H * 3];
     let cw = ENC_W / 2;
     for row in 0..ENC_H {
         for col in 0..ENC_W {
@@ -561,25 +561,19 @@ fn compose(y: &[u8], cb: &[u8], cr: &[u8]) -> Vec<u8> {
             let r = yy + 1.402 * (cri - 128.0);
             let g = yy - 0.344136 * (cbi - 128.0) - 0.714136 * (cri - 128.0);
             let b = yy + 1.772 * (cbi - 128.0);
-            let px = rgb888_to_555(
+            let px = [
                 r.clamp(0.0, 255.0) as u8,
                 g.clamp(0.0, 255.0) as u8,
                 b.clamp(0.0, 255.0) as u8,
-            );
-            let i = (row * ENC_W + col) * 2;
-            out[i..i + 2].copy_from_slice(&px.to_le_bytes());
+            ];
+            let i = (row * ENC_W + col) * 3;
+            out[i..i + 3].copy_from_slice(&px);
         }
     }
     out
 }
 
-pub fn rgb555_to_rgb888(v: u16) -> (u8, u8, u8) {
-    let r = (v & 0x1F) as u8;
-    let g = ((v >> 5) & 0x1F) as u8;
-    let b = ((v >> 10) & 0x1F) as u8;
-    (
-        (r << 3) | (r >> 2),
-        (g << 3) | (g >> 2),
-        (b << 3) | (b >> 2),
-    )
+/// Extract eight-bit channels from a 0x00RRGGBB pixel.
+pub fn unpack_rgb888(v: u32) -> (u8, u8, u8) {
+    ((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }

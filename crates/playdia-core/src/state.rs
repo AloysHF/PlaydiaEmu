@@ -4,7 +4,8 @@ use crc32fast::Hasher;
 use thiserror::Error;
 
 pub const STATE_MAGIC: &[u8; 8] = b"PLAYDIA1";
-pub const STATE_VERSION: u16 = 1;
+// Version 2 stores framebuffer pixels as little-endian XRGB8888 words.
+pub const STATE_VERSION: u16 = 2;
 
 #[derive(Debug, Error)]
 pub enum SaveStateError {
