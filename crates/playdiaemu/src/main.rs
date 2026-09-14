@@ -1,12 +1,12 @@
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use playdia_core::machine::{Machine, MachineConfig, RunStop};
 use playdia_core::player::{DiscPlayer, PlayerStop};
 use playdia_core::InputButtons;
 use rodio::buffer::SamplesBuffer;
 use rodio::{DeviceSinkBuilder, Player};
 use std::num::NonZero;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 #[derive(Parser)]
@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
     about = "Playdia standalone emulator (HLE disc player + LLE shell)"
 )]
 struct Cli {
-    /// Open a window and play this disc (used when no subcommand is given)
+    /// Path to .cue (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
     /// Window scale factor (native is 320x240)
     #[arg(long, default_value_t = 3)]
@@ -23,216 +23,225 @@ struct Cli {
     /// Target FPS for the window frontend
     #[arg(long, default_value_t = 30)]
     fps: u32,
-    /// Compatibility flag; native AK8000 decoding is already enabled
-    #[arg(long)]
-    full_decode: bool,
     /// Mute host audio (window mode)
     #[arg(long)]
     mute: bool,
-    /// Quit window mode after N host frames (0 = until closed)
-    #[arg(long, default_value_t = 0)]
-    frames: u32,
-    /// Save PPM when quitting window mode via --frames
+    /// Run without opening a window
+    #[arg(long)]
+    headless: bool,
+    /// Number of frames to run (headless defaults: HLE 180, LLE 60; window 0 = until closed)
+    #[arg(long)]
+    frames: Option<u32>,
+    /// Save final framebuffer as PPM (HLE window/HLE headless)
     #[arg(long)]
     dump_ppm: Option<PathBuf>,
-    #[command(subcommand)]
-    cmd: Option<Cmd>,
-}
-
-#[derive(Subcommand)]
-enum Cmd {
-    /// HLE disc player: stream Track 2 video/audio without BIOS (headless).
-    Play {
-        /// Path to .cue (preferred) or raw .bin/.iso
-        disc: PathBuf,
-        #[arg(long, default_value_t = 180)]
-        frames: u32,
-        /// Dump final framebuffer as PPM after the run.
-        #[arg(long)]
-        dump_ppm: Option<PathBuf>,
-        /// Dump every Nth decoded frame as PPM into this directory.
-        #[arg(long)]
-        dump_every: Option<u32>,
-        /// Dump directory for periodic frames (with --dump-every).
-        #[arg(long, default_value = "tmp/out")]
-        dump_dir: PathBuf,
-        /// Compatibility flag; native AK8000 decoding is already enabled.
-        #[arg(long)]
-        full_decode: bool,
-        /// Press a button at a host frame, e.g. --press-at 120:a.
-        #[arg(long = "press-at", value_parser = parse_press_at)]
-        press_at: Vec<(u32, InputButtons)>,
-    },
-    /// LLE-oriented headless (SH-1 + bus). Prefer `play` for disc playback.
-    Headless {
-        disc: PathBuf,
-        #[arg(long)]
-        bios: Option<PathBuf>,
-        #[arg(long, default_value_t = 60)]
-        frames: u32,
-        #[arg(long)]
-        allow_placeholder_bios: bool,
-        #[arg(long)]
-        audio_test_tone: bool,
-        #[arg(long)]
-        save_state: Option<PathBuf>,
-        #[arg(long)]
-        load_state: Option<PathBuf>,
-        #[arg(long)]
-        dump_fb: Option<PathBuf>,
-    },
+    /// Dump every Nth decoded frame as PPM into this directory (HLE headless)
+    #[arg(long)]
+    dump_every: Option<u32>,
+    /// Directory for periodic dumps (with --dump-every)
+    #[arg(long, default_value = "tmp/out")]
+    dump_dir: PathBuf,
+    /// Compatibility flag; native AK8000 decoding is already enabled
+    #[arg(long)]
+    full_decode: bool,
+    /// Press a button at a host frame, e.g. --press-at 120:a (HLE headless)
+    #[arg(long = "press-at", value_parser = parse_press_at)]
+    press_at: Vec<(u32, InputButtons)>,
+    /// Use the LLE machine (SH-1 + bus) instead of the HLE disc player
+    #[arg(long)]
+    lle: bool,
+    /// Path to a 512 KiB BIOS EPROM (LLE)
+    #[arg(long)]
+    bios: Option<PathBuf>,
+    /// Allow empty placeholder BIOS for LLE experiments
+    #[arg(long)]
+    allow_placeholder_bios: bool,
+    /// Emit a test tone instead of disc audio (LLE)
+    #[arg(long)]
+    audio_test_tone: bool,
+    /// Write save state after the run (LLE)
+    #[arg(long)]
+    save_state: Option<PathBuf>,
+    /// Load save state before the run (LLE)
+    #[arg(long)]
+    load_state: Option<PathBuf>,
+    /// Dump raw 320x240 XRGB8888 framebuffer words (LLE)
+    #[arg(long)]
+    dump_fb: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let cli = Cli::parse();
-    match cli.cmd {
-        None => {
-            let Some(disc) = cli.disc else {
-                bail!("provide a disc path, or a subcommand (play / headless)");
-            };
-            run_window(
-                &disc,
-                cli.scale,
-                cli.fps,
-                cli.full_decode,
-                cli.mute,
-                cli.frames,
-                cli.dump_ppm.as_ref(),
-            )
-        }
-        Some(Cmd::Play {
-            disc,
+    let Some(disc) = cli.disc.clone() else {
+        bail!("provide a disc path (optional --headless / --lle)");
+    };
+
+    let use_lle = cli.lle
+        || cli.bios.is_some()
+        || cli.allow_placeholder_bios
+        || cli.audio_test_tone
+        || cli.save_state.is_some()
+        || cli.load_state.is_some()
+        || cli.dump_fb.is_some();
+    let headless = cli.headless || use_lle;
+    let frames = cli.frames.unwrap_or(if use_lle {
+        60
+    } else if headless {
+        180
+    } else {
+        0
+    });
+
+    if use_lle {
+        run_lle(&disc, frames, &cli)
+    } else if headless {
+        run_hle_headless(
+            &disc,
             frames,
-            dump_ppm,
-            dump_every,
-            dump_dir,
-            full_decode,
-            press_at,
-        }) => {
-            let mut p = DiscPlayer::new();
-            if full_decode {
-                p.video.params.ac_dequant = 1;
-            }
-            p.load_path(&disc).context("load disc")?;
-            if let Some(dir) = dump_every.map(|_| dump_dir.clone()) {
-                std::fs::create_dir_all(&dir).ok();
-            }
-            let mut dumped = 0u32;
-            for i in 0..frames {
-                let mut held = InputButtons::default();
-                for &(at, buttons) in &press_at {
-                    if at == i {
-                        held = buttons;
-                    }
-                }
-                p.set_input(held);
-                let previous_frames = p.video.frames_decoded;
-                let stop = p.run_frame();
-                if let Some(n) = dump_every {
-                    if n > 0
-                        && p.video.frames_decoded > previous_frames
-                        && p.video.frames_decoded.is_multiple_of(n as u64)
-                    {
-                        let path = dump_dir.join(format!("frame_{:05}.ppm", dumped));
-                        p.video.dump_ppm(&path)?;
-                        println!("wrote {}", path.display());
-                        dumped += 1;
-                    }
-                }
-                if stop != PlayerStop::Ok {
-                    log::warn!("stop={stop:?} at host_frame {}", p.frame);
-                    break;
-                }
-                if i % 30 == 0 {
-                    println!("host_frame={} {}", i, p.stats_line());
-                }
-            }
-            if let Some(path) = dump_ppm {
-                p.video.dump_ppm(&path)?;
-                println!("wrote {}", path.display());
-            }
-            let audio = p.drain_audio();
-            println!(
-                "DONE {} audio_samples={} track_idx={} interactive={}",
-                p.stats_line(),
-                audio.len(),
-                p.track_index,
-                p.interactive.len()
-            );
-            if p.video.frames_decoded == 0 {
-                bail!("no video frames decoded (failed={})", p.video.frames_failed);
-            }
-            Ok(())
-        }
-        Some(Cmd::Headless {
-            disc,
-            bios,
+            cli.full_decode,
+            cli.dump_ppm.as_ref(),
+            cli.dump_every,
+            &cli.dump_dir,
+            &cli.press_at,
+        )
+    } else {
+        run_window(
+            &disc,
+            cli.scale,
+            cli.fps,
+            cli.full_decode,
+            cli.mute,
             frames,
-            allow_placeholder_bios,
-            audio_test_tone,
-            save_state,
-            load_state,
-            dump_fb,
-        }) => {
-            let cfg = MachineConfig {
-                allow_placeholder_bios,
-                enable_xa_stream: true,
-                audio_test_tone,
-            };
-            let mut m = Machine::new(cfg);
-            if let Some(bios) = bios {
-                m.load_bios_path(&bios).context("load bios")?;
-            } else if !allow_placeholder_bios {
-                bail!("--bios is required unless --allow-placeholder-bios is set");
-            }
-            m.load_disc_path(&disc).context("load disc")?;
-            m.reset();
-            if let Some(path) = load_state {
-                let bytes = std::fs::read(&path).context("read state")?;
-                m.load_state(&bytes).context("load state")?;
-            }
-            for _ in 0..frames {
-                let stop = m.run_frame();
-                if stop != RunStop::Ok {
-                    log::warn!("stop={stop:?} at frame {}", m.frame);
-                    break;
-                }
-            }
-            let fb_crc = {
-                let bytes: Vec<u8> = m
-                    .framebuffer()
-                    .iter()
-                    .flat_map(|p| p.to_le_bytes())
-                    .collect();
-                playdia_core::state::crc32(&bytes)
-            };
-            let audio = m.drain_audio();
-            println!(
-                "frames={} fb_crc={fb_crc:08x} audio_samples={} cpu_pc={:08x} stopped={:?}",
-                m.frame,
-                audio.len(),
-                m.cpu.pc,
-                m.cpu.stopped
-            );
-            if let Some(path) = dump_fb {
-                let bytes: Vec<u8> = m
-                    .framebuffer()
-                    .iter()
-                    .flat_map(|p| p.to_le_bytes())
-                    .collect();
-                std::fs::write(path, bytes)?;
-            }
-            if let Some(path) = save_state {
-                std::fs::write(path, m.save_state())?;
-            }
-            Ok(())
-        }
+            cli.dump_ppm.as_ref(),
+        )
     }
 }
 
+fn run_hle_headless(
+    disc: &Path,
+    frames: u32,
+    full_decode: bool,
+    dump_ppm: Option<&PathBuf>,
+    dump_every: Option<u32>,
+    dump_dir: &Path,
+    press_at: &[(u32, InputButtons)],
+) -> Result<()> {
+    let mut p = DiscPlayer::new();
+    if full_decode {
+        p.video.params.ac_dequant = 1;
+    }
+    p.load_path(disc).context("load disc")?;
+    if let Some(n) = dump_every {
+        if n > 0 {
+            std::fs::create_dir_all(dump_dir).ok();
+        }
+    }
+    let mut dumped = 0u32;
+    for i in 0..frames {
+        let mut held = InputButtons::default();
+        for &(at, buttons) in press_at {
+            if at == i {
+                held = buttons;
+            }
+        }
+        p.set_input(held);
+        let previous_frames = p.video.frames_decoded;
+        let stop = p.run_frame();
+        if let Some(n) = dump_every {
+            if n > 0
+                && p.video.frames_decoded > previous_frames
+                && p.video.frames_decoded.is_multiple_of(n as u64)
+            {
+                let path = dump_dir.join(format!("frame_{:05}.ppm", dumped));
+                p.video.dump_ppm(&path)?;
+                println!("wrote {}", path.display());
+                dumped += 1;
+            }
+        }
+        if stop != PlayerStop::Ok {
+            log::warn!("stop={stop:?} at host_frame {}", p.frame);
+            break;
+        }
+        if i % 30 == 0 {
+            println!("host_frame={} {}", i, p.stats_line());
+        }
+    }
+    if let Some(path) = dump_ppm {
+        p.video.dump_ppm(path)?;
+        println!("wrote {}", path.display());
+    }
+    let audio = p.drain_audio();
+    println!(
+        "DONE {} audio_samples={} track_idx={} interactive={}",
+        p.stats_line(),
+        audio.len(),
+        p.track_index,
+        p.interactive.len()
+    );
+    if p.video.frames_decoded == 0 {
+        bail!("no video frames decoded (failed={})", p.video.frames_failed);
+    }
+    Ok(())
+}
+
+fn run_lle(disc: &Path, frames: u32, cli: &Cli) -> Result<()> {
+    let cfg = MachineConfig {
+        allow_placeholder_bios: cli.allow_placeholder_bios,
+        enable_xa_stream: true,
+        audio_test_tone: cli.audio_test_tone,
+    };
+    let mut m = Machine::new(cfg);
+    if let Some(bios) = cli.bios.as_deref() {
+        m.load_bios_path(bios).context("load bios")?;
+    } else if !cli.allow_placeholder_bios {
+        bail!("--bios is required unless --allow-placeholder-bios is set");
+    }
+    m.load_disc_path(disc).context("load disc")?;
+    m.reset();
+    if let Some(path) = cli.load_state.as_deref() {
+        let bytes = std::fs::read(path).context("read state")?;
+        m.load_state(&bytes).context("load state")?;
+    }
+    for _ in 0..frames {
+        let stop = m.run_frame();
+        if stop != RunStop::Ok {
+            log::warn!("stop={stop:?} at frame {}", m.frame);
+            break;
+        }
+    }
+    let fb_crc = {
+        let bytes: Vec<u8> = m
+            .framebuffer()
+            .iter()
+            .flat_map(|p| p.to_le_bytes())
+            .collect();
+        playdia_core::state::crc32(&bytes)
+    };
+    let audio = m.drain_audio();
+    println!(
+        "frames={} fb_crc={fb_crc:08x} audio_samples={} cpu_pc={:08x} stopped={:?}",
+        m.frame,
+        audio.len(),
+        m.cpu.pc,
+        m.cpu.stopped
+    );
+    if let Some(path) = cli.dump_fb.as_deref() {
+        let bytes: Vec<u8> = m
+            .framebuffer()
+            .iter()
+            .flat_map(|p| p.to_le_bytes())
+            .collect();
+        std::fs::write(path, bytes)?;
+    }
+    if let Some(path) = cli.save_state.as_deref() {
+        std::fs::write(path, m.save_state())?;
+    }
+    Ok(())
+}
+
 fn run_window(
-    disc: &std::path::Path,
+    disc: &Path,
     scale: u32,
     fps: u32,
     full_decode: bool,

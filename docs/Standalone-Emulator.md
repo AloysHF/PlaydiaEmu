@@ -25,28 +25,28 @@ The binary is produced at `target/release/playdia-emu.exe` (`.exe` on Windows).
 ## Synopsis
 
 ```text
-playdia-emu [OPTIONS] [DISC] [COMMAND]
-
-Commands:
-  play      HLE disc player: stream Track 2 video/audio without BIOS
-  headless  LLE-oriented headless (SH-1 + bus)
+playdia-emu [OPTIONS] DISC
 ```
 
-With no subcommand, `DISC` opens the windowed HLE player. Disc inspection
-lives in `playdia-tools` (`playdia-inspect`).
+There are no subcommands. With a disc path and no `--headless`, the windowed
+HLE player opens. `--headless` runs the HLE disc player without a window
+(aligned with `spmp8000-emu` / `dingoo-emu`). Pass `--lle` (or any LLE option
+such as `--bios`) to use the SH-1 machine path instead. Disc inspection lives
+in `playdia-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
 ```powershell
-cargo run --release -p playdiaemu -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 --dump-ppm out.ppm
 ```
 
-### `play` options
+### HLE options
 
 | Option | Default | Description |
 |---|---|---|
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
-| `--frames N` | `180` | Host frames to run (~8 stream sectors each) |
+| `--headless` | off | Run without opening a window |
+| `--frames N` | `180` (headless) | Host frames to run (~8 stream sectors each) |
 | `--dump-ppm PATH` | — | Write final 320×240 PPM |
 | `--dump-every N` | — | Periodic PPM dumps every N frames |
 | `--dump-dir DIR` | `tmp/out` | Directory for periodic dumps |
@@ -61,16 +61,16 @@ XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 2
 codes or damaged packets retain the previous frame. Rare VLC entries and
 hardware transform/color rounding still need validation.
 
-Example: `playdia-emu play game.cue --frames 180 --press-at 122:a --dump-ppm scene.ppm`.
+Example: `playdia-emu game.cue --headless --frames 180 --press-at 122:a --dump-ppm scene.ppm`.
 Frame numbers start at zero. Use a frame after a choice prompt appears; the
 `waiting=true` field in the progress output marks that state.
 
 Example (private research corpus — do not commit discs):
 
 ```powershell
-cargo run --release -p playdiaemu -- play `
+cargo run --release -p playdiaemu -- `
   "tmp/iso/Mari-nee no Heya (Japan)/Mari-nee no Heya (Japan).cue" `
-  --frames 90 --dump-ppm tmp/out/mari.ppm
+  --headless --frames 90 --dump-ppm tmp/out/mari.ppm
 ```
 
 ## Window frontend
@@ -142,19 +142,22 @@ are supported. `--assembled` accepts an already assembled packet for isolated
 debugging. PPM output is 248×216 RGB888. The player and its 320×240 PPM screenshots
 preserve exactly the same channel precision, with a centered black border.
 
-## LLE headless (optional)
+## LLE (optional)
 
-Requires a user-supplied BIOS for retail boot. Prefer `play` for disc playback.
+Requires a user-supplied BIOS for retail boot. Prefer the default HLE path for
+disc playback. Select the LLE machine with `--lle` (or by passing any LLE-only
+option such as `--bios`).
 
 ```powershell
-cargo run --release -p playdiaemu -- headless path\to\disc.iso --bios bios.bin --frames 60
+cargo run --release -p playdiaemu -- path\to\disc.iso --lle --bios bios.bin --frames 60
 ```
 
-### `headless` options
+### LLE options
 
 | Option | Default | Description |
 |---|---|---|
 | `<DISC>` | *required* | Disc image path |
+| `--lle` | off | Use the LLE machine (SH-1 + bus) instead of the HLE disc player |
 | `--bios PATH` | — | 512 KiB BIOS EPROM |
 | `--frames N` | `60` | Frames to run |
 | `--allow-placeholder-bios` | off | Explicit test mode (refuses silent zero-fill otherwise) |
@@ -178,7 +181,7 @@ Both binaries use `env_logger`. Default filter is `info`. For example:
 
 ```powershell
 $env:RUST_LOG="debug"
-cargo run --release -p playdiaemu -- play path\to\game.cue --frames 30
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 30
 ```
 
 ## See also

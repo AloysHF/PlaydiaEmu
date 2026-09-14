@@ -16,7 +16,7 @@ Research-grade but usable for disc playback:
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
 - **Headless machine** — deterministic `run_frame`, save states, diagnostics
-- **Standalone CLI / window** — `play` / `headless` plus `playdia-emu` window
+- **Standalone CLI / window** — window / `--headless` HLE player / `--lle` LLE shell
 - **Libretro core** — RetroArch-compatible cdylib shell
 
 ## Features
@@ -35,7 +35,7 @@ Research-grade but usable for disc playback:
 ### Standalone Mode (HLE, no BIOS)
 
 ```powershell
-cargo run --release -p playdiaemu -- play path\to\game.cue --frames 180 --dump-ppm out.ppm
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 --dump-ppm out.ppm
 ```
 
 For a reproducible button choice in headless playback, add for example
@@ -45,6 +45,12 @@ Windowed playback:
 
 ```powershell
 cargo run --release -p playdiaemu -- path\to\game.cue
+```
+
+LLE machine path (optional; needs BIOS):
+
+```powershell
+cargo run --release -p playdiaemu -- path\to\disc.iso --lle --bios bios.bin --frames 60
 ```
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
@@ -71,7 +77,7 @@ Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
 
 ```powershell
 cargo build --release -p playdiaemu
-cargo run --release -p playdiaemu -- play path\to\game.cue --frames 180
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 ```
 
 ### Window frontend
@@ -162,7 +168,7 @@ crates/
 │       └── diagnostics.rs   # Unmapped / unknown / budget counters
 ├── playdiaemu/              # Standalone binary (→ playdia-emu)
 │   └── src/
-│       └── main.rs          # Window + CLI (play / headless)
+│       └── main.rs          # Window + CLI (window / --headless / --lle)
 ├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
 │   ├── playdiaemu_libretro.info
 │   └── src/lib.rs           # libretro C ABI

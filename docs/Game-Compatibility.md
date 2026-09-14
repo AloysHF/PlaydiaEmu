@@ -36,9 +36,9 @@ cargo run --release -p playdia-tools --bin playdia-inspect -- "tmp/iso/<title>/<
 Play headlessly and dump a frame:
 
 ```powershell
-cargo run --release -p playdiaemu -- play `
+cargo run --release -p playdiaemu -- `
   "tmp/iso/<title>/<title>.cue" `
-  --frames 120 --dump-ppm tmp/out/<title>.ppm
+  --headless --frames 120 --dump-ppm tmp/out/<title>.ppm
 ```
 
 Record:

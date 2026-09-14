@@ -41,7 +41,7 @@ core metadata.
 
 > The core advertises `cue|iso|bin` and requires the full content path
 > (`need_fullpath`). Dual-track CUE/BIN support via the libretro front is
-> limited compared with the standalone `play` path — prefer the standalone
+> limited compared with the standalone HLE `--headless` path — prefer the standalone
 > HLE player for real Redump CUE/BIN titles.
 
 ## Supported Features
@@ -85,7 +85,7 @@ rejects the format. No RGB555 fallback reduces the decoded channel precision.
 - No core options UI yet
 - Cheats are stubbed (`retro_cheat_*` no-ops)
 - No Android / iOS / webOS packaging docs yet
-- Content loading is not yet the same dual-track HLE path as `playdia-emu play`
+- Content loading is not yet the same dual-track HLE path as the standalone `--headless` player
 - BIOS is still required for retail LLE boot
 - The shared core includes native AK8000 picture decoding; this does not remove
   the libretro content-loading and LLE boot limitations above
