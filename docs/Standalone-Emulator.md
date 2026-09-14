@@ -28,12 +28,12 @@ The binary is produced at `target/release/playdia-emu.exe` (`.exe` on Windows).
 playdia-emu [OPTIONS] [DISC] [COMMAND]
 
 Commands:
-  inspect   Inspect a CUE/BIN or raw disc image
   play      HLE disc player: stream Track 2 video/audio without BIOS
   headless  LLE-oriented headless (SH-1 + bus)
 ```
 
-With no subcommand, `DISC` opens the windowed HLE player.
+With no subcommand, `DISC` opens the windowed HLE player. Disc inspection
+lives in `playdia-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
@@ -104,11 +104,11 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 
 ## Inspect
 
-Print disc kind, tracks, CRC, ISO volume label sample, and stream-track
-F1/F2/F3 / audio sector counts:
+Disc inspection is provided by `playdia-tools` (`playdia-inspect`). Print disc
+kind, tracks, CRC, ISO volume label sample, and stream-track F1/F2/F3 / audio
+sector counts:
 
 ```powershell
-cargo run --release -p playdiaemu -- inspect path\to\game.cue
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers
 cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-rows

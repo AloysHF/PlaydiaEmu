@@ -1,10 +1,8 @@
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
+use playdia_core::machine::{Machine, MachineConfig, RunStop};
 use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::{
-    machine::{Machine, MachineConfig, RunStop},
-    DiscKind, InputButtons, FB_HEIGHT, FB_WIDTH,
-};
+use playdia_core::InputButtons;
 use rodio::buffer::SamplesBuffer;
 use rodio::{DeviceSinkBuilder, Player};
 use std::num::NonZero;
@@ -43,8 +41,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Inspect a CUE/BIN or raw disc image.
-    Inspect { disc: PathBuf },
     /// HLE disc player: stream Track 2 video/audio without BIOS (headless).
     Play {
         /// Path to .cue (preferred) or raw .bin/.iso
@@ -93,7 +89,7 @@ fn main() -> Result<()> {
     match cli.cmd {
         None => {
             let Some(disc) = cli.disc else {
-                bail!("provide a disc path, or a subcommand (inspect / play / headless)");
+                bail!("provide a disc path, or a subcommand (play / headless)");
             };
             run_window(
                 &disc,
@@ -104,62 +100,6 @@ fn main() -> Result<()> {
                 cli.frames,
                 cli.dump_ppm.as_ref(),
             )
-        }
-        Some(Cmd::Inspect { disc }) => {
-            let d = playdia_core::DiscImage::from_path(&disc).context("load disc")?;
-            println!("kind={:?}", d.kind);
-            println!("total_sectors={}", d.total_sectors);
-            println!("crc32={:08x}", d.crc);
-            for t in &d.tracks {
-                println!(
-                    "track{} sectors={} mode2={} bytes={}",
-                    t.number,
-                    t.sectors,
-                    t.mode2,
-                    t.data.len()
-                );
-            }
-            // Sample first track sectors for ISO + stream track markers.
-            if let Some(t) = d.data_track() {
-                if t.sectors > 16 {
-                    let sec = &t.data[16 * 2352..17 * 2352];
-                    let sig = &sec[25..30];
-                    println!(
-                        "pvd_sig={:?} volume={:?}",
-                        String::from_utf8_lossy(sig),
-                        String::from_utf8_lossy(&sec[40..72])
-                    );
-                }
-            }
-            if let Some(t) = d.stream_track() {
-                let mut f1 = 0u32;
-                let mut f2 = 0u32;
-                let mut f3 = 0u32;
-                let mut aud = 0u32;
-                for i in 0..t.sectors.min(8000) {
-                    let o = i as usize * 2352;
-                    if o + 25 >= t.data.len() {
-                        break;
-                    }
-                    let sm = t.data[o + 18];
-                    let mk = t.data[o + 24];
-                    if sm & 0x04 != 0 {
-                        aud += 1;
-                    } else if sm & 0x08 != 0 {
-                        match mk {
-                            0xF1 => f1 += 1,
-                            0xF2 => f2 += 1,
-                            0xF3 => f3 += 1,
-                            _ => {}
-                        }
-                    }
-                }
-                println!(
-                    "stream_track={} f1={} f2={} f3={} audio={}",
-                    t.number, f1, f2, f3, aud
-                );
-            }
-            Ok(())
         }
         Some(Cmd::Play {
             disc,
@@ -286,12 +226,6 @@ fn main() -> Result<()> {
             if let Some(path) = save_state {
                 std::fs::write(path, m.save_state())?;
             }
-            let _ = (
-                FB_WIDTH,
-                FB_HEIGHT,
-                InputButtons::default(),
-                DiscKind::SingleRaw,
-            );
             Ok(())
         }
     }

@@ -41,12 +41,24 @@ fn main() -> Result<()> {
             t.data.len()
         );
     }
+    // Sample the first data track for ISO PVD signature and volume label.
+    if let Some(t) = disc.data_track() {
+        if t.sectors > 16 {
+            let sec = &t.data[16 * 2352..17 * 2352];
+            let sig = &sec[25..30];
+            println!(
+                "pvd_sig={:?} volume={:?}",
+                String::from_utf8_lossy(sig),
+                String::from_utf8_lossy(&sec[40..72])
+            );
+        }
+    }
     if let Some(t) = disc.stream_track() {
         let mut f1 = 0u32;
         let mut f2 = 0u32;
         let mut f3 = 0u32;
         let mut aud = 0u32;
-        for i in 0..t.sectors.min(5000) {
+        for i in 0..t.sectors.min(8000) {
             let o = i as usize * 2352;
             if o + 25 >= t.data.len() {
                 break;

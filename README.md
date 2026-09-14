@@ -16,7 +16,7 @@ Research-grade but usable for disc playback:
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`
 - **Headless machine** — deterministic `run_frame`, save states, diagnostics
-- **Standalone CLI / window** — `play` / `inspect` / `headless` plus `playdia-emu` window
+- **Standalone CLI / window** — `play` / `headless` plus `playdia-emu` window
 - **Libretro core** — RetroArch-compatible cdylib shell
 
 ## Features
@@ -162,7 +162,7 @@ crates/
 │       └── diagnostics.rs   # Unmapped / unknown / budget counters
 ├── playdiaemu/              # Standalone binary (→ playdia-emu)
 │   └── src/
-│       └── main.rs          # Window + CLI (play / inspect / headless)
+│       └── main.rs          # Window + CLI (play / headless)
 ├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
 │   ├── playdiaemu_libretro.info
 │   └── src/lib.rs           # libretro C ABI
