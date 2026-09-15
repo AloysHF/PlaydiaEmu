@@ -53,6 +53,7 @@ core metadata.
 - Stereo audio output at 44100 Hz
 - RetroPad input handling (including interactive F2 choice mapping)
 - Host pacing at 30 fps (matches standalone HLE video slot rate)
+- Save states via libretro serialize / unserialize (version 2 envelope; disc CRC must match)
 
 ## RetroPad Button Mapping
 
@@ -81,7 +82,6 @@ A/Start, B, Right, Left, Up, Down.
 
 - No core options UI yet
 - Cheats are stubbed (`retro_cheat_*` no-ops)
-- No save states (HLE player has no machine state blob; matches standalone)
 - No Android / iOS / webOS packaging docs yet
 
 ## Building notes

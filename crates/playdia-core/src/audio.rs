@@ -160,4 +160,45 @@ impl AudioDecoder {
         }
         out
     }
+
+    pub fn encode_body(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.blocks.to_le_bytes());
+        out.extend_from_slice(&self.bytes.to_le_bytes());
+        for i in 0..2 {
+            out.extend_from_slice(&self.prev[i].to_le_bytes());
+            out.extend_from_slice(&self.prev2[i].to_le_bytes());
+        }
+        out.extend_from_slice(&self.tone_phase.to_le_bytes());
+        out.extend_from_slice(&(self.pcm.len() as u32).to_le_bytes());
+        for s in &self.pcm {
+            out.extend_from_slice(&s.to_le_bytes());
+        }
+    }
+
+    pub fn decode_body(
+        &mut self,
+        p: &[u8],
+        o: &mut usize,
+    ) -> Result<(), crate::state::SaveStateError> {
+        use crate::state::SaveStateError;
+        let take = |o: &mut usize, n: usize| -> Result<&[u8], SaveStateError> {
+            let s = p.get(*o..*o + n).ok_or(SaveStateError::Truncated)?;
+            *o += n;
+            Ok(s)
+        };
+        self.blocks = u64::from_le_bytes(take(o, 8)?.try_into().unwrap());
+        self.bytes = u64::from_le_bytes(take(o, 8)?.try_into().unwrap());
+        for i in 0..2 {
+            self.prev[i] = i32::from_le_bytes(take(o, 4)?.try_into().unwrap());
+            self.prev2[i] = i32::from_le_bytes(take(o, 4)?.try_into().unwrap());
+        }
+        self.tone_phase = f32::from_le_bytes(take(o, 4)?.try_into().unwrap());
+        let n = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        self.pcm = Vec::with_capacity(n);
+        for _ in 0..n {
+            self.pcm
+                .push(i16::from_le_bytes(take(o, 2)?.try_into().unwrap()));
+        }
+        Ok(())
+    }
 }

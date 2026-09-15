@@ -7,7 +7,7 @@ use crate::audio::AudioDecoder;
 use crate::cd::{XaDemux, XaPacket};
 use crate::content::{DiscImage, LoadError, RAW_SECTOR};
 use crate::input::{InputButtons, InputState};
-use crate::state::{crc32, ContentIdentity};
+use crate::state::{crc32, decode_state, encode_state, ContentIdentity, SaveStateError};
 use crate::video::VideoDecoder;
 use crate::{FB_HEIGHT, FB_WIDTH};
 
@@ -448,6 +448,159 @@ impl DiscPlayer {
 
     pub fn raw_sector_size() -> usize {
         RAW_SECTOR
+    }
+
+    pub fn save_state(&self) -> Vec<u8> {
+        let payload = self.encode_payload();
+        encode_state(&self.identity, &payload)
+    }
+
+    pub fn load_state(&mut self, buf: &[u8]) -> Result<(), SaveStateError> {
+        let payload = decode_state(buf, &self.identity)?;
+        self.decode_payload(&payload)?;
+        Ok(())
+    }
+
+    fn encode_payload(&self) -> Vec<u8> {
+        let mut p = Vec::new();
+        p.extend_from_slice(&self.frame.to_le_bytes());
+        p.extend_from_slice(&self.sector_cursor.to_le_bytes());
+        p.extend_from_slice(&self.track_index.to_le_bytes());
+        match self.waiting {
+            Some(dest) => {
+                p.push(1);
+                for d in dest {
+                    match d {
+                        Some(lba) => {
+                            p.push(1);
+                            p.extend_from_slice(&lba.to_le_bytes());
+                        }
+                        None => p.push(0),
+                    }
+                }
+            }
+            None => p.push(0),
+        }
+        for v in [
+            self.demux.video_sectors,
+            self.demux.audio_sectors,
+            self.demux.other_sectors,
+            self.demux.frame_ends,
+            self.demux.interactive_cmds,
+            self.demux.scene_resets,
+        ] {
+            p.extend_from_slice(&v.to_le_bytes());
+        }
+        match self.demux.last_video_lba {
+            Some(lba) => {
+                p.push(1);
+                p.extend_from_slice(&lba.to_le_bytes());
+            }
+            None => p.push(0),
+        }
+        match self.demux.last_audio_lba {
+            Some(lba) => {
+                p.push(1);
+                p.extend_from_slice(&lba.to_le_bytes());
+            }
+            None => p.push(0),
+        }
+        p.push(u8::from(self.demux.end_flag));
+        self.video.encode_body(&mut p);
+        self.audio.encode_body(&mut p);
+        p.push(buttons_mask(self.input.held));
+        p
+    }
+
+    fn decode_payload(&mut self, p: &[u8]) -> Result<(), SaveStateError> {
+        let mut o = 0usize;
+        let take = |o: &mut usize, n: usize| -> Result<&[u8], SaveStateError> {
+            let s = p.get(*o..*o + n).ok_or(SaveStateError::Truncated)?;
+            *o += n;
+            Ok(s)
+        };
+        self.frame = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.sector_cursor = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap());
+        self.track_index = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap());
+        self.waiting = if take(&mut o, 1)?[0] == 0 {
+            None
+        } else {
+            let mut dest = [None; 7];
+            for slot in &mut dest {
+                if take(&mut o, 1)?[0] == 0 {
+                    *slot = None;
+                } else {
+                    *slot = Some(u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap()));
+                }
+            }
+            Some(dest)
+        };
+        self.demux.video_sectors = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.demux.audio_sectors = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.demux.other_sectors = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.demux.frame_ends = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.demux.interactive_cmds = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.demux.scene_resets = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
+        self.demux.last_video_lba = if take(&mut o, 1)?[0] == 0 {
+            None
+        } else {
+            Some(u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap()))
+        };
+        self.demux.last_audio_lba = if take(&mut o, 1)?[0] == 0 {
+            None
+        } else {
+            Some(u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap()))
+        };
+        self.demux.end_flag = take(&mut o, 1)?[0] != 0;
+        self.video.decode_body(p, &mut o)?;
+        self.audio.decode_body(p, &mut o)?;
+        self.input.held = buttons_from_mask(take(&mut o, 1)?[0]);
+        self.input.pressed = InputButtons::default();
+        self.input.released = InputButtons::default();
+        self.interactive.clear();
+        Ok(())
+    }
+}
+
+fn buttons_mask(b: InputButtons) -> u8 {
+    let mut m = 0u8;
+    if b.up {
+        m |= 1;
+    }
+    if b.down {
+        m |= 2;
+    }
+    if b.left {
+        m |= 4;
+    }
+    if b.right {
+        m |= 8;
+    }
+    if b.a {
+        m |= 16;
+    }
+    if b.b {
+        m |= 32;
+    }
+    if b.start {
+        m |= 64;
+    }
+    if b.select {
+        m |= 128;
+    }
+    m
+}
+
+fn buttons_from_mask(m: u8) -> InputButtons {
+    InputButtons {
+        up: m & 1 != 0,
+        down: m & 2 != 0,
+        left: m & 4 != 0,
+        right: m & 8 != 0,
+        a: m & 16 != 0,
+        b: m & 32 != 0,
+        start: m & 64 != 0,
+        select: m & 128 != 0,
     }
 }
 

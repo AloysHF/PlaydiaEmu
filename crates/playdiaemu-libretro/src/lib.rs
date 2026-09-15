@@ -257,17 +257,48 @@ fn poll_input() {
 
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
-    // HLE DiscPlayer has no machine save-state blob (matches standalone).
+    if let Ok(guard) = CORE.lock() {
+        if let Some(p) = guard.as_ref() {
+            return p.save_state().len();
+        }
+    }
     0
 }
 
 #[no_mangle]
-pub extern "C" fn retro_serialize(_data: *mut c_void, _size: usize) -> bool {
+pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
+    if data.is_null() {
+        return false;
+    }
+    if let Ok(guard) = CORE.lock() {
+        if let Some(p) = guard.as_ref() {
+            let blob = p.save_state();
+            if blob.len() > size {
+                return false;
+            }
+            unsafe {
+                ptr::copy_nonoverlapping(blob.as_ptr(), data as *mut u8, blob.len());
+            }
+            return true;
+        }
+    }
     false
 }
 
 #[no_mangle]
-pub extern "C" fn retro_unserialize(_data: *const c_void, _size: usize) -> bool {
+pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
+    if data.is_null() {
+        return false;
+    }
+    let mut buf = vec![0u8; size];
+    unsafe {
+        ptr::copy_nonoverlapping(data as *const u8, buf.as_mut_ptr(), size);
+    }
+    if let Ok(mut guard) = CORE.lock() {
+        if let Some(p) = guard.as_mut() {
+            return p.load_state(&buf).is_ok();
+        }
+    }
     false
 }
 
@@ -418,11 +449,19 @@ mod tests {
         let info = game_info_for_bytes(&disc);
         assert!(retro_load_game(&info));
         assert!(CORE.lock().unwrap().is_some());
-        assert_eq!(retro_serialize_size(), 0);
 
         retro_run();
         assert!(VIDEO_SEEN.load(Ordering::SeqCst));
         assert!(VIDEO_DIMS_OK.load(Ordering::SeqCst));
+
+        // Save-state roundtrip on the same disc.
+        let n = retro_serialize_size();
+        assert!(n > 0);
+        let mut blob = vec![0u8; n];
+        assert!(retro_serialize(blob.as_mut_ptr().cast(), blob.len()));
+        retro_run();
+        assert!(retro_unserialize(blob.as_ptr().cast(), blob.len()));
+        assert_eq!(retro_serialize_size(), n);
 
         retro_reset();
         retro_unload_game();

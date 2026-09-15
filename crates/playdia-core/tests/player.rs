@@ -270,3 +270,33 @@ fn horizontal_choices_use_the_disc_button_order() {
         assert!(!player.is_waiting_for_input());
     }
 }
+
+#[test]
+fn player_save_state_roundtrips_playback_position() {
+    let mut p1 = DiscPlayer::new();
+    p1.load_bytes(synthetic_stream_disc()).unwrap();
+    for _ in 0..8 {
+        let _ = p1.run_frame();
+    }
+    let fb0 = p1.framebuffer().to_vec();
+    let stats0 = p1.stats_line();
+    let blob = p1.save_state();
+
+    let mut p2 = DiscPlayer::new();
+    p2.load_bytes(synthetic_stream_disc()).unwrap();
+    p2.load_state(&blob).unwrap();
+    assert_eq!(p2.frame, p1.frame);
+    assert_eq!(p2.sector_cursor, p1.sector_cursor);
+    assert_eq!(p2.framebuffer(), fb0.as_slice());
+    assert_eq!(p2.stats_line(), stats0);
+
+    // Wrong content must fail without mutating the player.
+    let mut p3 = DiscPlayer::new();
+    let mut other = synthetic_stream_disc();
+    other[0] = 0xFF;
+    // Ensure size stays valid for from_bytes
+    p3.load_bytes(other).unwrap();
+    let before = p3.save_state();
+    assert!(p3.load_state(&blob).is_err());
+    assert_eq!(p3.save_state(), before);
+}

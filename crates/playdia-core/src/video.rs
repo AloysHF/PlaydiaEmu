@@ -239,6 +239,77 @@ impl VideoDecoder {
         self.pending.clear();
     }
 
+    pub fn encode_body(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.frames_decoded.to_le_bytes());
+        out.extend_from_slice(&self.frames_failed.to_le_bytes());
+        out.extend_from_slice(&self.bytes_ingested.to_le_bytes());
+        out.push(match self.last_kind {
+            FrameKind::None => 0,
+            FrameKind::Still => 1,
+            FrameKind::Progressive => 2,
+        });
+        out.extend_from_slice(&(self.last_packet_len as u32).to_le_bytes());
+        out.extend_from_slice(&(self.acc.len() as u32).to_le_bytes());
+        out.extend_from_slice(&self.acc);
+        out.extend_from_slice(&self.acc_sectors.to_le_bytes());
+        out.push(u8::from(self.acc_overflow));
+        out.push(self.last_qs);
+        out.extend_from_slice(&self.last_qtable);
+        out.extend_from_slice(&(self.last_blocks as u32).to_le_bytes());
+        out.extend_from_slice(&(self.pending.len() as u32).to_le_bytes());
+        for frame in &self.pending {
+            out.extend_from_slice(&(frame.len() as u32).to_le_bytes());
+            out.extend_from_slice(frame);
+        }
+        out.extend_from_slice(&self.framebuffer.len().to_le_bytes());
+        for px in &self.framebuffer {
+            out.extend_from_slice(&px.to_le_bytes());
+        }
+    }
+
+    pub fn decode_body(
+        &mut self,
+        p: &[u8],
+        o: &mut usize,
+    ) -> Result<(), crate::state::SaveStateError> {
+        use crate::state::SaveStateError;
+        let take = |o: &mut usize, n: usize| -> Result<&[u8], SaveStateError> {
+            let s = p.get(*o..*o + n).ok_or(SaveStateError::Truncated)?;
+            *o += n;
+            Ok(s)
+        };
+        self.frames_decoded = u64::from_le_bytes(take(o, 8)?.try_into().unwrap());
+        self.frames_failed = u64::from_le_bytes(take(o, 8)?.try_into().unwrap());
+        self.bytes_ingested = u64::from_le_bytes(take(o, 8)?.try_into().unwrap());
+        self.last_kind = match take(o, 1)?[0] {
+            0 => FrameKind::None,
+            1 => FrameKind::Still,
+            2 => FrameKind::Progressive,
+            _ => return Err(SaveStateError::Truncated),
+        };
+        self.last_packet_len = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        let acc_len = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        self.acc = take(o, acc_len)?.to_vec();
+        self.acc_sectors = u32::from_le_bytes(take(o, 4)?.try_into().unwrap());
+        self.acc_overflow = take(o, 1)?[0] != 0;
+        self.last_qs = take(o, 1)?[0];
+        self.last_qtable = take(o, 16)?.try_into().unwrap();
+        self.last_blocks = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        let pending_len = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        self.pending.clear();
+        for _ in 0..pending_len {
+            let n = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+            self.pending.push_back(take(o, n)?.to_vec());
+        }
+        let fb_words = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        self.framebuffer = Vec::with_capacity(fb_words);
+        for _ in 0..fb_words {
+            self.framebuffer
+                .push(u32::from_le_bytes(take(o, 4)?.try_into().unwrap()));
+        }
+        Ok(())
+    }
+
     fn decode_accumulated(&mut self) {
         let buf = std::mem::take(&mut self.acc);
         self.last_packet_len = buf.len();
