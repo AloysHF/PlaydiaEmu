@@ -2,13 +2,14 @@
 //!
 //! Implements the classic libretro C ABI so the core can be loaded by
 //! RetroArch-compatible frontends once a disc image is supplied.
+//! Uses the same HLE DiscPlayer path as the standalone emulator.
 
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::field_reassign_with_default)]
 #![allow(clippy::chunks_exact_to_as_chunks)]
 #![allow(clippy::if_same_then_else)]
 
-use playdia_core::machine::{Machine, MachineConfig};
+use playdia_core::player::DiscPlayer;
 use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 use std::ffi::c_void;
 use std::os::raw::{c_char, c_int, c_uint};
@@ -27,11 +28,12 @@ const RETRO_DEVICE_ID_JOYPAD_LEFT: c_uint = 6;
 const RETRO_DEVICE_ID_JOYPAD_RIGHT: c_uint = 7;
 const RETRO_DEVICE_ID_JOYPAD_A: c_uint = 8;
 const RETRO_DEVICE_ID_JOYPAD_X: c_uint = 9;
-const RETRO_MEMORY_SAVE_RAM: c_uint = 0;
 const RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: c_uint = 10;
-const RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME: c_uint = 18;
 const RETRO_PIXEL_FORMAT_XRGB8888: c_int = 1;
 const RETRO_REGION_NTSC: c_uint = 0;
+
+/// Standalone HLE paces ~30 host frames/sec for disc video.
+const HOST_FPS: f64 = 30.0;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -59,8 +61,7 @@ pub struct GameGeometry {
     base_height: c_uint,
     max_width: c_uint,
     max_height: c_uint,
-    aspect_num: c_uint,
-    aspect_den: c_uint,
+    aspect_ratio: f32,
 }
 
 #[repr(C)]
@@ -103,7 +104,7 @@ static mut CALLBACKS: Callbacks = Callbacks {
     input_state: None,
 };
 
-static CORE: Mutex<Option<Machine>> = Mutex::new(None);
+static CORE: Mutex<Option<DiscPlayer>> = Mutex::new(None);
 
 fn cstr(bytes: &[u8]) -> *const c_char {
     bytes.as_ptr() as *const c_char
@@ -116,14 +117,7 @@ pub extern "C" fn retro_api_version() -> c_int {
 
 #[no_mangle]
 pub extern "C" fn retro_set_environment(cb: EnvironmentFn) {
-    unsafe {
-        CALLBACKS.environment = Some(cb);
-        let mut no_game: u8 = 1;
-        cb(
-            RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME,
-            &mut no_game as *mut u8 as *mut c_void,
-        );
-    }
+    unsafe { CALLBACKS.environment = Some(cb) }
 }
 
 #[no_mangle]
@@ -179,15 +173,22 @@ pub extern "C" fn retro_get_system_av_info(info: *mut RetroSystemAvInfo) {
                 base_height: FB_HEIGHT as c_uint,
                 max_width: FB_WIDTH as c_uint,
                 max_height: FB_HEIGHT as c_uint,
-                aspect_num: 4,
-                aspect_den: 3,
+                aspect_ratio: 4.0 / 3.0,
             },
             timing: SystemTiming {
-                fps: 60.0,
+                fps: HOST_FPS,
                 sample_rate: 44100.0,
             },
         };
     }
+}
+
+#[no_mangle]
+pub extern "C" fn retro_init() {}
+
+#[no_mangle]
+pub extern "C" fn retro_deinit() {
+    *CORE.lock().unwrap() = None;
 }
 
 #[no_mangle]
@@ -206,9 +207,9 @@ pub extern "C" fn retro_reset() {
 pub extern "C" fn retro_run() {
     poll_input();
     if let Ok(mut guard) = CORE.lock() {
-        let Some(m) = guard.as_mut() else { return };
-        let _ = m.run_frame();
-        let fb = m.framebuffer();
+        let Some(p) = guard.as_mut() else { return };
+        let _ = p.run_frame();
+        let fb = p.framebuffer();
         if let Some(cb) = unsafe { CALLBACKS.video_refresh } {
             cb(
                 fb.as_ptr() as *const c_void,
@@ -217,7 +218,7 @@ pub extern "C" fn retro_run() {
                 FB_WIDTH * 4,
             );
         }
-        let audio = m.drain_audio();
+        let audio = p.drain_audio();
         if !audio.is_empty() {
             if let Some(batch) = unsafe { CALLBACKS.audio_sample_batch } {
                 batch(audio.as_ptr(), audio.len() / 2);
@@ -232,7 +233,7 @@ pub extern "C" fn retro_run() {
 
 fn poll_input() {
     let Ok(mut guard) = CORE.lock() else { return };
-    let Some(m) = guard.as_mut() else { return };
+    let Some(p) = guard.as_mut() else { return };
     if let Some(poll) = unsafe { CALLBACKS.input_poll } {
         poll();
     }
@@ -250,53 +251,22 @@ fn poll_input() {
     b.right = state(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_RIGHT) != 0;
     let _ = RETRO_DEVICE_ID_JOYPAD_X;
     let _ = RETRO_DEVICE_ID_JOYPAD_Y;
-    m.set_input(b);
+    p.set_input(b);
 }
 
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
-    if let Ok(guard) = CORE.lock() {
-        if let Some(m) = guard.as_ref() {
-            return m.save_state().len();
-        }
-    }
+    // HLE DiscPlayer has no machine save-state blob (matches standalone).
     0
 }
 
 #[no_mangle]
-pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
-    if data.is_null() {
-        return false;
-    }
-    if let Ok(guard) = CORE.lock() {
-        if let Some(m) = guard.as_ref() {
-            let blob = m.save_state();
-            if blob.len() > size {
-                return false;
-            }
-            unsafe {
-                ptr::copy_nonoverlapping(blob.as_ptr(), data as *mut u8, blob.len());
-            }
-            return true;
-        }
-    }
+pub extern "C" fn retro_serialize(_data: *mut c_void, _size: usize) -> bool {
     false
 }
 
 #[no_mangle]
-pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
-    if data.is_null() {
-        return false;
-    }
-    let mut buf = vec![0u8; size];
-    unsafe {
-        ptr::copy_nonoverlapping(data as *const u8, buf.as_mut_ptr(), size);
-    }
-    if let Ok(mut guard) = CORE.lock() {
-        if let Some(m) = guard.as_mut() {
-            return m.load_state(&buf).is_ok();
-        }
-    }
+pub extern "C" fn retro_unserialize(_data: *const c_void, _size: usize) -> bool {
     false
 }
 
@@ -308,35 +278,33 @@ pub extern "C" fn retro_cheat_set(_index: c_uint, _enabled: bool, _code: *const 
 
 #[no_mangle]
 pub extern "C" fn retro_load_game(game: *const GameInfo) -> bool {
-    let cfg = MachineConfig {
-        allow_placeholder_bios: true,
-        enable_xa_stream: true,
-        audio_test_tone: false,
-    };
-    let mut m = Machine::new(cfg);
-    if !game.is_null() {
-        let g = unsafe { &*game };
-        if !g.path.is_null() {
-            let path = unsafe {
-                let mut len = 0usize;
-                while *g.path.add(len) != 0 {
-                    len += 1;
-                }
-                std::slice::from_raw_parts(g.path as *const u8, len)
-            };
-            if let Ok(s) = std::str::from_utf8(path) {
-                if m.load_disc_path(std::path::Path::new(s)).is_err() {
-                    return false;
-                }
-            }
-        } else if !g.data.is_null() && g.size > 0 {
-            let bytes = unsafe { std::slice::from_raw_parts(g.data as *const u8, g.size).to_vec() };
-            if m.load_disc_bytes(bytes).is_err() {
-                return false;
-            }
-        }
+    if game.is_null() {
+        return false;
     }
-    m.reset();
+    let g = unsafe { &*game };
+    let mut p = DiscPlayer::new();
+    if !g.path.is_null() {
+        let path = unsafe {
+            let mut len = 0usize;
+            while *g.path.add(len) != 0 {
+                len += 1;
+            }
+            std::slice::from_raw_parts(g.path as *const u8, len)
+        };
+        let Ok(s) = std::str::from_utf8(path) else {
+            return false;
+        };
+        if p.load_path(std::path::Path::new(s)).is_err() {
+            return false;
+        }
+    } else if !g.data.is_null() && g.size > 0 {
+        let bytes = unsafe { std::slice::from_raw_parts(g.data as *const u8, g.size).to_vec() };
+        if p.load_bytes(bytes).is_err() {
+            return false;
+        }
+    } else {
+        return false;
+    }
     let Some(env) = (unsafe { CALLBACKS.environment }) else {
         return false;
     };
@@ -347,7 +315,7 @@ pub extern "C" fn retro_load_game(game: *const GameInfo) -> bool {
     ) {
         return false;
     }
-    *CORE.lock().unwrap() = Some(m);
+    *CORE.lock().unwrap() = Some(p);
     true
 }
 
@@ -378,11 +346,8 @@ pub extern "C" fn retro_get_memory_data(id: c_uint) -> *mut c_void {
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_size(id: c_uint) -> usize {
-    if id == RETRO_MEMORY_SAVE_RAM {
-        0
-    } else {
-        0
-    }
+    let _ = id;
+    0
 }
 
 #[cfg(test)]
@@ -392,6 +357,7 @@ mod tests {
 
     static ACCEPT_FORMAT: AtomicBool = AtomicBool::new(false);
     static VIDEO_SEEN: AtomicBool = AtomicBool::new(false);
+    static VIDEO_DIMS_OK: AtomicBool = AtomicBool::new(false);
 
     extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
         if cmd == RETRO_ENVIRONMENT_SET_PIXEL_FORMAT {
@@ -402,34 +368,63 @@ mod tests {
     }
 
     extern "C" fn video(data: *const c_void, width: c_uint, height: c_uint, pitch: usize) {
-        let pixels =
-            unsafe { std::slice::from_raw_parts(data as *const u32, FB_WIDTH * FB_HEIGHT) };
-        VIDEO_SEEN.store(
-            width == 320
-                && height == 240
-                && pitch == 320 * 4
-                && pixels[0] == 0x0081_8283
-                && pixels[320 * 240 - 1] == 0x0001_FE07,
+        VIDEO_SEEN.store(!data.is_null(), Ordering::SeqCst);
+        VIDEO_DIMS_OK.store(
+            width == FB_WIDTH as c_uint && height == FB_HEIGHT as c_uint && pitch == FB_WIDTH * 4,
             Ordering::SeqCst,
         );
     }
 
+    fn synthetic_raw_disc() -> Vec<u8> {
+        let raw_sectors = 4;
+        let mut raw = vec![0u8; 2352 * raw_sectors];
+        for i in 0..raw_sectors {
+            let off = i * 2352;
+            raw[off + 15] = 2;
+            raw[off + 16] = 0;
+            raw[off + 17] = 0;
+            raw[off + 18] = 0x08;
+            raw[off + 22] = 0x08;
+            raw[off + 24] = 0xF1;
+            for b in 1..64 {
+                raw[off + 24 + b] = b as u8;
+            }
+        }
+        raw
+    }
+
+    fn game_info_for_bytes(bytes: &[u8]) -> GameInfo {
+        GameInfo {
+            path: ptr::null(),
+            data: bytes.as_ptr() as *const c_void,
+            size: bytes.len(),
+            meta: ptr::null(),
+        }
+    }
+
     #[test]
-    fn negotiates_xrgb8888_and_preserves_channels_and_pitch() {
+    fn negotiates_xrgb8888_and_runs_disc_player() {
         retro_set_environment(environment);
         retro_set_video_refresh(video);
+        ACCEPT_FORMAT.store(true, Ordering::SeqCst);
+        VIDEO_SEEN.store(false, Ordering::SeqCst);
+        VIDEO_DIMS_OK.store(false, Ordering::SeqCst);
+
         assert!(!retro_load_game(ptr::null()));
         assert!(CORE.lock().unwrap().is_none());
-        ACCEPT_FORMAT.store(true, Ordering::SeqCst);
-        assert!(retro_load_game(ptr::null()));
-        {
-            let mut guard = CORE.lock().unwrap();
-            let m = guard.as_mut().unwrap();
-            m.video.framebuffer[0] = 0x0081_8283;
-            m.video.framebuffer[320 * 240 - 1] = 0x0001_FE07;
-        }
+
+        let disc = synthetic_raw_disc();
+        let info = game_info_for_bytes(&disc);
+        assert!(retro_load_game(&info));
+        assert!(CORE.lock().unwrap().is_some());
+        assert_eq!(retro_serialize_size(), 0);
+
         retro_run();
         assert!(VIDEO_SEEN.load(Ordering::SeqCst));
+        assert!(VIDEO_DIMS_OK.load(Ordering::SeqCst));
+
+        retro_reset();
         retro_unload_game();
+        assert!(CORE.lock().unwrap().is_none());
     }
 }
