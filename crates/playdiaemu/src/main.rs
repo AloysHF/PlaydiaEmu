@@ -18,7 +18,12 @@ struct Cli {
     /// Path to .cue (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
     /// Window scale factor (native is 320x240)
-    #[arg(short, long, default_value_t = 1)]
+    #[arg(
+        short,
+        long,
+        default_value_t = 1,
+        value_parser = clap::value_parser!(u32).range(1..=8)
+    )]
     scale: u32,
     /// Run in fullscreen mode
     #[arg(short, long)]
@@ -161,7 +166,7 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
     }
     player.load_path(disc).context("failed to load disc")?;
 
-    let scale = cli.scale.clamp(1, 8) as usize;
+    let scale = cli.scale as usize;
     let (window_width, window_height) = if cli.fullscreen {
         screen_size()
     } else {
