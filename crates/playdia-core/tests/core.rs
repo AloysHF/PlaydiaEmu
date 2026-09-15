@@ -6,6 +6,7 @@ use playdia_core::diagnostics::Diagnostics;
 use playdia_core::machine::{Machine, MachineConfig, RunStop};
 use playdia_core::sh1::Sh1;
 use playdia_core::state::{crc32, decode_state, encode_state, ContentIdentity};
+use std::io::Write;
 
 #[test]
 fn bios_size_check() {
@@ -32,6 +33,72 @@ fn disc_accepts_raw_and_cooked() {
     let d = DiscImage::from_bytes(cooked).unwrap();
     assert_eq!(d.kind, playdia_core::DiscKind::SingleCooked);
     assert_eq!(d.total_sectors, 3);
+}
+
+#[test]
+fn disc_loads_multi_track_zip() {
+    let dir = std::env::temp_dir().join("playdiaemu-zip-cue-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let zip_path = dir.join("game.zip");
+
+    let track1 = vec![0u8; RAW_SECTOR * 2];
+    let track2 = {
+        let mut t = vec![0u8; RAW_SECTOR * 3];
+        t[15] = 2;
+        t[18] = 0x08;
+        t[22] = 0x08;
+        t[24] = 0xF1;
+        t
+    };
+    let cue = "FILE \"game (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"game (Track 2).bin\" BINARY\n  TRACK 02 MODE2/2352\n    INDEX 01 00:00:00\n";
+
+    {
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("game (Track 1).bin", opts).unwrap();
+        zip.write_all(&track1).unwrap();
+        zip.start_file("game (Track 2).bin", opts).unwrap();
+        zip.write_all(&track2).unwrap();
+        zip.start_file("game.cue", opts).unwrap();
+        zip.write_all(cue.as_bytes()).unwrap();
+        zip.finish().unwrap();
+    }
+
+    let d = DiscImage::from_path(&zip_path).unwrap();
+    assert_eq!(d.kind, playdia_core::DiscKind::CueMultiTrack);
+    assert_eq!(d.tracks.len(), 2);
+    assert_eq!(d.total_sectors, 5);
+    assert!(d.stream_track().is_some());
+    let stream = d.stream_track().unwrap();
+    assert_eq!(stream.number, 2);
+    assert_eq!(stream.data.len(), RAW_SECTOR * 3);
+}
+
+#[test]
+fn disc_loads_single_image_zip() {
+    let dir = std::env::temp_dir().join("playdiaemu-zip-single-test");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let zip_path = dir.join("single.zip");
+    let raw = vec![0xA5u8; RAW_SECTOR * 2];
+
+    {
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut zip = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.start_file("disc.bin", opts).unwrap();
+        zip.write_all(&raw).unwrap();
+        zip.finish().unwrap();
+    }
+
+    let d = DiscImage::from_path(&zip_path).unwrap();
+    assert_eq!(d.kind, playdia_core::DiscKind::SingleRaw);
+    assert_eq!(d.total_sectors, 2);
+    assert_eq!(d.single.as_ref().unwrap().data, raw);
 }
 
 #[test]

@@ -1,6 +1,8 @@
-//! Content loading: raw/cooked discs + multi-track CUE+BIN.
+//! Content loading: raw/cooked discs, multi-track CUE+BIN, and ZIP archives.
 
 use crate::state::crc32;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -22,6 +24,12 @@ pub enum LoadError {
     Cue(String),
     #[error("missing bin for cue track: {0}")]
     MissingBin(String),
+    #[error("zip: {0}")]
+    Zip(String),
+    #[error("missing zip entry for cue track: {0}")]
+    MissingZipEntry(String),
+    #[error("no disc image in zip")]
+    NoDiscInZip,
 }
 
 /// One MODE2/2352 (or MODE1) binary track from a CUE sheet.
@@ -59,6 +67,12 @@ pub struct SingleImage {
     pub raw: bool,
 }
 
+struct CueFileRef {
+    number: u8,
+    file_name: String,
+    mode2: bool,
+}
+
 impl DiscImage {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, LoadError> {
         if bytes.is_empty() {
@@ -86,7 +100,7 @@ impl DiscImage {
         })
     }
 
-    /// Load `.cue` (+ sibling `.bin`) or a raw/cooked image by extension.
+    /// Load `.cue` (+ sibling `.bin`), `.zip` (CUE/BIN inside), or raw/cooked image.
     pub fn from_path(path: &Path) -> Result<Self, LoadError> {
         let ext = path
             .extension()
@@ -95,6 +109,7 @@ impl DiscImage {
             .to_ascii_lowercase();
         match ext.as_str() {
             "cue" => Self::from_cue(path),
+            "zip" => Self::from_zip(path),
             "iso" | "bin" | "img" => {
                 let data = std::fs::read(path)?;
                 Self::from_bytes(data)
@@ -111,49 +126,56 @@ impl DiscImage {
         let text = std::fs::read_to_string(cue_path)?;
         let base = cue_path.parent().unwrap_or(Path::new("."));
         let mut tracks: Vec<Track> = Vec::new();
-        let mut current: Option<(u8, PathBuf, bool)> = None;
+        for CueFileRef {
+            number,
+            file_name,
+            mode2,
+        } in parse_cue_file_refs(&text)?
+        {
+            let path = base.join(&file_name);
+            tracks.push(Self::load_track_file(number, path, mode2)?);
+        }
+        Self::finish_cue(cue_path.to_path_buf(), tracks)
+    }
 
-        for raw_line in text.lines() {
-            let line = raw_line.trim();
-            if line.is_empty() || line.starts_with("//") {
-                continue;
+    /// Load a Redump-style ZIP containing a `.cue` + track bins, or a lone image.
+    pub fn from_zip(path: &Path) -> Result<Self, LoadError> {
+        let file = File::open(path)?;
+        let mut archive = zip::ZipArchive::new(file)
+            .map_err(|e| LoadError::Zip(format!("{}: {e}", path.display())))?;
+
+        let names: Vec<String> = archive.file_names().map(|s| s.to_owned()).collect();
+        if let Some(cue_name) = pick_cue_name(&names) {
+            let text = read_zip_entry(&mut archive, &cue_name)?;
+            let text = String::from_utf8_lossy(&text).into_owned();
+            let mut tracks: Vec<Track> = Vec::new();
+            for CueFileRef {
+                number,
+                file_name,
+                mode2,
+            } in parse_cue_file_refs(&text)?
+            {
+                let entry = find_zip_entry(&names, &file_name).ok_or_else(|| {
+                    LoadError::MissingZipEntry(format!("{file_name} (in {})", path.display()))
+                })?;
+                let data = read_zip_entry(&mut archive, &entry)?;
+                tracks.push(Self::track_from_bytes(
+                    number,
+                    path.join(&file_name),
+                    data,
+                    mode2,
+                )?);
             }
-            let upper = line.to_ascii_uppercase();
-            if upper.starts_with("FILE ") {
-                if let Some((num, pth, mode2)) = current.take() {
-                    tracks.push(Self::load_track(num, pth, mode2)?);
-                }
-                // FILE "name" BINARY
-                let rest = line[5..].trim();
-                let name = if let Some(stripped) = rest.strip_prefix('"') {
-                    match stripped.find('"') {
-                        Some(end) => &stripped[..end],
-                        None => stripped,
-                    }
-                } else {
-                    rest.split_whitespace().next().unwrap_or("")
-                };
-                if name.is_empty() {
-                    return Err(LoadError::Cue("empty FILE name".into()));
-                }
-                current = Some((0, base.join(name), false));
-            } else if upper.starts_with("TRACK ") {
-                let num: u8 = line
-                    .split_whitespace()
-                    .nth(1)
-                    .and_then(|s| s.parse().ok())
-                    .ok_or_else(|| LoadError::Cue(format!("bad TRACK: {line}")))?;
-                let mode2 = upper.contains("MODE2");
-                if let Some((_, pth, _)) = current.as_mut() {
-                    // Keep path; attach track number.
-                    let path = pth.clone();
-                    current = Some((num, path, mode2));
-                }
-            }
+            return Self::finish_cue(path.to_path_buf(), tracks);
         }
-        if let Some((num, pth, mode2)) = current.take() {
-            tracks.push(Self::load_track(num, pth, mode2)?);
-        }
+
+        // Fallback: single image inside the archive.
+        let image_name = pick_single_image_name(&names).ok_or(LoadError::NoDiscInZip)?;
+        let data = read_zip_entry(&mut archive, &image_name)?;
+        Self::from_bytes(data)
+    }
+
+    fn finish_cue(cue_path: PathBuf, tracks: Vec<Track>) -> Result<Self, LoadError> {
         if tracks.is_empty() {
             return Err(LoadError::Cue("no tracks".into()));
         }
@@ -164,7 +186,7 @@ impl DiscImage {
         }
         let crc = crc32(&crc_src);
         Ok(Self {
-            cue_path: Some(cue_path.to_path_buf()),
+            cue_path: Some(cue_path),
             tracks,
             single: None,
             total_sectors,
@@ -173,12 +195,21 @@ impl DiscImage {
         })
     }
 
-    fn load_track(number: u8, path: PathBuf, mode2: bool) -> Result<Track, LoadError> {
+    fn load_track_file(number: u8, path: PathBuf, mode2: bool) -> Result<Track, LoadError> {
         if !path.exists() {
             return Err(LoadError::MissingBin(path.display().to_string()));
         }
         let data = std::fs::read(&path)?;
-        if data.len() % RAW_SECTOR != 0 {
+        Self::track_from_bytes(number, path, data, mode2)
+    }
+
+    fn track_from_bytes(
+        number: u8,
+        path: PathBuf,
+        data: Vec<u8>,
+        mode2: bool,
+    ) -> Result<Track, LoadError> {
+        if !data.len().is_multiple_of(RAW_SECTOR) {
             return Err(LoadError::BadDiscSize(data.len()));
         }
         let sectors = (data.len() / RAW_SECTOR) as u32;
@@ -263,6 +294,118 @@ impl DiscImage {
             None
         }
     }
+}
+
+fn parse_cue_file_refs(text: &str) -> Result<Vec<CueFileRef>, LoadError> {
+    let mut refs: Vec<CueFileRef> = Vec::new();
+    let mut current: Option<(u8, String, bool)> = None;
+
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with("//") {
+            continue;
+        }
+        let upper = line.to_ascii_uppercase();
+        if upper.starts_with("FILE ") {
+            if let Some((num, name, mode2)) = current.take() {
+                refs.push(CueFileRef {
+                    number: num,
+                    file_name: name,
+                    mode2,
+                });
+            }
+            let rest = line[5..].trim();
+            let name = if let Some(stripped) = rest.strip_prefix('"') {
+                match stripped.find('"') {
+                    Some(end) => &stripped[..end],
+                    None => stripped,
+                }
+            } else {
+                rest.split_whitespace().next().unwrap_or("")
+            };
+            if name.is_empty() {
+                return Err(LoadError::Cue("empty FILE name".into()));
+            }
+            current = Some((0, name.to_owned(), false));
+        } else if upper.starts_with("TRACK ") {
+            let num: u8 = line
+                .split_whitespace()
+                .nth(1)
+                .and_then(|s| s.parse().ok())
+                .ok_or_else(|| LoadError::Cue(format!("bad TRACK: {line}")))?;
+            let mode2 = upper.contains("MODE2");
+            if let Some((_, name, _)) = current.as_mut() {
+                let name = name.clone();
+                current = Some((num, name, mode2));
+            }
+        }
+    }
+    if let Some((num, name, mode2)) = current.take() {
+        refs.push(CueFileRef {
+            number: num,
+            file_name: name,
+            mode2,
+        });
+    }
+    Ok(refs)
+}
+
+fn pick_cue_name(names: &[String]) -> Option<String> {
+    names
+        .iter()
+        .filter(|n| {
+            Path::new(n.as_str())
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("cue"))
+                .unwrap_or(false)
+        })
+        .min_by_key(|n| n.len())
+        .cloned()
+}
+
+fn pick_single_image_name(names: &[String]) -> Option<String> {
+    names
+        .iter()
+        .filter(|n| {
+            Path::new(n.as_str())
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| {
+                    let e = e.to_ascii_lowercase();
+                    e == "bin" || e == "iso" || e == "img"
+                })
+                .unwrap_or(false)
+        })
+        .max_by_key(|n| n.len())
+        .cloned()
+}
+
+fn find_zip_entry(names: &[String], want: &str) -> Option<String> {
+    let want_norm = normalize_zip_name(want);
+    let want_base = base_name(&want_norm);
+    names
+        .iter()
+        .map(|n| (n, normalize_zip_name(n)))
+        .find(|(_, norm)| *norm == want_norm || base_name(norm) == want_base)
+        .map(|(n, _)| n.clone())
+}
+
+fn normalize_zip_name(name: &str) -> String {
+    name.replace('\\', "/").to_ascii_lowercase()
+}
+
+fn base_name(name: &str) -> &str {
+    name.rsplit('/').next().unwrap_or(name)
+}
+
+fn read_zip_entry(archive: &mut zip::ZipArchive<File>, name: &str) -> Result<Vec<u8>, LoadError> {
+    let mut file = archive
+        .by_name(name)
+        .map_err(|e| LoadError::Zip(format!("entry {name}: {e}")))?;
+    let mut data = Vec::with_capacity(file.size() as usize);
+    file.read_to_end(&mut data)?;
+    Ok(data)
 }
 
 #[derive(Debug, Clone)]

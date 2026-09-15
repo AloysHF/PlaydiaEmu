@@ -9,6 +9,7 @@ player.
 | Kind | Notes |
 |------|-------|
 | Dual-track CUE/BIN | Preferred. Raw 2352-byte Mode2 sectors. |
+| ZIP archive | Redump-style zip containing `.cue` + track bins, or a single `.bin`/`.iso`. Loaded in-process; no extract step. |
 | Cooked ISO9660 | 2048-byte sectors; no XA realtime path. |
 
 Typical layout:

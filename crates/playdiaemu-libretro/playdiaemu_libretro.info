@@ -1,7 +1,7 @@
 # Software Information
 display_name = "Playdia (PlaydiaEmu)"
 authors = "Aloys"
-supported_extensions = "cue|iso|bin"
+supported_extensions = "cue|zip|iso|bin"
 corename = "playdiaemu"
 categories = "Emulator"
 license = "MIT"
@@ -26,7 +26,8 @@ core_options = "false"
 load_subsystem = "false"
 hw_render = "false"
 needs_fullpath = "true"
+block_extract = "true"
 disk_control = "false"
 is_experimental = "true"
 
-description = "PlaydiaEmu is an emulator for the Bandai Playdia interactive CD console. This libretro core is the HLE disc player (same path as the standalone emulator): dual-track MODE2 CUE/BIN, F1/F2/F3 routing, XA audio, no BIOS required."
+description = "PlaydiaEmu is an emulator for the Bandai Playdia interactive CD console. This libretro core is the HLE disc player (same path as the standalone emulator): dual-track MODE2 CUE/BIN (including Redump-style ZIP), F1/F2/F3 routing, XA audio, no BIOS required."

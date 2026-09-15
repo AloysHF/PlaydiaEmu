@@ -37,12 +37,14 @@ core metadata.
 
 1. Open RetroArch and select **Load Core > Playdia (PlaydiaEmu)**.
 2. Select **Load Content**.
-3. Choose a `.cue` (preferred), `.iso`, or raw `.bin` disc image.
+3. Choose a `.cue` (preferred), Redump-style `.zip`, `.iso`, or raw `.bin` disc image.
 
-> The core advertises `cue|iso|bin` and requires the full content path
-> (`need_fullpath`). Content loading uses the same HLE `DiscPlayer` path as
-> the standalone emulator: dual-track MODE2 CUE/BIN, F1/F2/F3 routing, XA
-> audio. No BIOS is required.
+> The core advertises `cue|zip|iso|bin` and requires the full content path
+> (`need_fullpath`, `block_extract`). Content loading uses the same HLE
+> `DiscPlayer` path as the standalone emulator: dual-track MODE2 CUE/BIN
+> (also when the CUE/BIN pair is inside a ZIP), F1/F2/F3 routing, XA audio.
+> No BIOS is required. ZIP paths are passed to the core so the frontend does
+> not extract archives.
 
 ## Supported Features
 
