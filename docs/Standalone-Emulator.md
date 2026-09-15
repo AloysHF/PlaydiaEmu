@@ -98,6 +98,7 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | `--swap-ab` | off | Swap emulated A and B |
 | `--no-gamepad` | off | Disable physical gamepad input (keyboard remains available) |
 | `--show-gamepad` | off | Draw button-state overlay on the game frame |
+| `--debug-logging` | off | Enable emulator debug logging (default filter `info`) |
 
 Window mode runs until the window is closed (or Esc / end of disc). `--frames`
 and `--screenshot` apply only to the headless path.
@@ -162,9 +163,11 @@ plays audio through the default host sink; use `-v 0` to disable it.
 
 ## Logging
 
-Both binaries use `env_logger`. Default filter is `info`. For example:
+Both binaries use `env_logger`. Default filter is `info`. Pass
+`--debug-logging` to use `debug` instead, or set `RUST_LOG` to override:
 
 ```powershell
+playdia-emu game.cue --debug-logging
 $env:RUST_LOG="debug"
 cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 30
 ```

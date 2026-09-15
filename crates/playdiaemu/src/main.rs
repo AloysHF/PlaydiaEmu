@@ -53,6 +53,9 @@ struct Cli {
     /// Show the current Playdia button state over the game frame
     #[arg(long)]
     show_gamepad: bool,
+    /// Enable emulator debug logging
+    #[arg(long)]
+    debug_logging: bool,
     /// Run without opening a window
     #[arg(long)]
     headless: bool,
@@ -77,8 +80,10 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let cli = Cli::parse();
+    let default_log_filter = if cli.debug_logging { "debug" } else { "info" };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_log_filter))
+        .init();
     let Some(disc) = cli.disc.clone() else {
         bail!("provide a disc path (optional --headless)");
     };
