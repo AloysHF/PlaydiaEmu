@@ -71,9 +71,6 @@ struct Cli {
     /// Directory for periodic dumps (with --dump-every)
     #[arg(long, default_value = "tmp/out")]
     dump_dir: PathBuf,
-    /// Compatibility flag; native AK8000 decoding is already enabled
-    #[arg(long)]
-    full_decode: bool,
     /// Press a button at a host frame, e.g. --press-at 120:a (headless)
     #[arg(long = "press-at", value_parser = parse_press_at)]
     press_at: Vec<(u32, InputButtons)>,
@@ -95,7 +92,6 @@ fn main() -> Result<()> {
         return run_hle_headless(
             &disc,
             frames,
-            cli.full_decode,
             screenshot,
             cli.dump_every,
             &cli.dump_dir,
@@ -109,16 +105,12 @@ fn main() -> Result<()> {
 fn run_hle_headless(
     disc: &Path,
     frames: u32,
-    full_decode: bool,
     screenshot: Option<&Path>,
     dump_every: Option<u32>,
     dump_dir: &Path,
     press_at: &[(u32, InputButtons)],
 ) -> Result<()> {
     let mut p = DiscPlayer::new();
-    if full_decode {
-        p.video.params.ac_dequant = 1;
-    }
     p.load_path(disc).context("load disc")?;
     if let Some(n) = dump_every {
         if n > 0 {
@@ -180,9 +172,6 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
 
     log::info!("Loading {}", disc.display());
     let mut player = DiscPlayer::new();
-    if cli.full_decode {
-        player.video.params.ac_dequant = 1;
-    }
     player.load_path(disc).context("failed to load disc")?;
 
     let scale = cli.scale as usize;

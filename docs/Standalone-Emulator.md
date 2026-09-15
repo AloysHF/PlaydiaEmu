@@ -51,7 +51,6 @@ cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 | `--screenshot-frames N` | `30` | Frames before the screenshot (overrides `--frames` when `-S` is set) |
 | `--dump-every N` | — | Periodic PPM dumps every N decoded frames |
 | `--dump-dir DIR` | `tmp/out` | Directory for periodic dumps |
-| `--full-decode` | off | Compatibility flag; native AK8000 decoding is already the default |
 | `--press-at FRAME:BUTTON` | — | Inject a one-frame press; repeat for multiple inputs. Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start` |
 
 The HLE player follows F2 scene jumps and pauses at F2 button choices until a
@@ -95,7 +94,6 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | `-f, --fullscreen` | off | Borderless fullscreen |
 | `--fps N` | `30` | Target FPS |
 | `-v, --volume N` | `100` | Master audio volume (0–100; `0` disables audio) |
-| `--full-decode` | off | Compatibility flag; native decoding is already enabled |
 | `--remap BUTTON:KEY` | — | Remap a button (repeatable). Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start`, `select` |
 | `--swap-ab` | off | Swap emulated A and B |
 | `--no-gamepad` | off | Disable physical gamepad input (keyboard remains available) |
