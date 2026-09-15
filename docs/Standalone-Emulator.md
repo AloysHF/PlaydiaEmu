@@ -96,6 +96,10 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | `--fps N` | `30` | Target FPS |
 | `-v, --volume N` | `100` | Master audio volume (0–100; `0` disables audio) |
 | `--full-decode` | off | Compatibility flag; native decoding is already enabled |
+| `--remap BUTTON:KEY` | — | Remap a button (repeatable). Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start`, `select` |
+| `--swap-ab` | off | Swap emulated A and B |
+| `--no-gamepad` | off | Disable physical gamepad input (keyboard remains available) |
+| `--show-gamepad` | off | Draw button-state overlay on the game frame |
 
 Window mode runs until the window is closed (or Esc / end of disc). `--frames`
 and `--screenshot` apply only to the headless path.
@@ -104,12 +108,14 @@ and `--screenshot` apply only to the headless path.
 
 | Key | Button |
 |-----|--------|
-| Arrow Up/Down/Left/Right or W/A/S/D | D-pad |
-| Z or J | A |
-| X or K | B |
+| Arrow Up/Down/Left/Right | D-pad |
+| Z | A |
+| X | B |
 | Enter | Start |
-| Space | Select |
+| Right Shift | Select |
 | Escape | Exit |
+
+Use `--remap` to replace a binding (for example `--remap a:space`). Escape is reserved for exit.
 
 ## Inspect
 

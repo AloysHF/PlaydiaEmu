@@ -8,6 +8,13 @@ use std::num::NonZero;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
+mod gamepad;
+mod gamepad_overlay;
+mod keyboard;
+
+use gamepad::GamepadMapper;
+use keyboard::{KeyboardMapper, RemapSpec};
+
 #[derive(Parser)]
 #[command(
     name = "playdia-emu",
@@ -34,6 +41,18 @@ struct Cli {
     /// Master audio volume (0-100)
     #[arg(short, long, default_value_t = 100, value_parser = clap::value_parser!(u8).range(0..=100))]
     volume: u8,
+    /// Remap a Playdia button using BUTTON:KEY syntax
+    #[arg(long = "remap", value_name = "BUTTON:KEY")]
+    remappings: Vec<RemapSpec>,
+    /// Swap the emulated A and B buttons
+    #[arg(long = "swap-ab")]
+    swap_ab: bool,
+    /// Disable physical gamepad input (keyboard remains available)
+    #[arg(long)]
+    no_gamepad: bool,
+    /// Show the current Playdia button state over the game frame
+    #[arg(long)]
+    show_gamepad: bool,
     /// Run without opening a window
     #[arg(long)]
     headless: bool,
@@ -208,21 +227,30 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
 
     let frame_dt = Duration::from_millis((1000 / cli.fps.max(1)) as u64);
     log::info!(
-        "Window {}x{} fps={} volume={}  Esc=quit  Arrows/WASD  Z/J=A  X/K=B  Enter=Start  Space=Select",
+        "Window {}x{} fps={} volume={}  Esc=quit  Arrows  Z=A  X=B  Enter=Start  Space=Select",
         window_width,
         window_height,
         cli.fps,
         cli.volume
     );
 
+    let keyboard = KeyboardMapper::new(&cli.remappings, cli.swap_ab);
+    let mut gamepad = GamepadMapper::new(!cli.no_gamepad, cli.swap_ab);
     let mut frames = 0u32;
+    let mut overlay = player.framebuffer().to_vec();
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
         let t0 = Instant::now();
-        player.set_input(key_buttons(&window));
+        let buttons = merge_buttons(keyboard.pressed_buttons(&window), gamepad.pressed_buttons());
+        player.set_input(buttons);
         let stop = player.run_frame();
 
+        overlay.clear();
+        overlay.extend_from_slice(player.framebuffer());
+        if cli.show_gamepad {
+            gamepad_overlay::draw(&mut overlay, FB_WIDTH, FB_HEIGHT, buttons);
+        }
         window
-            .update_with_buffer(player.framebuffer(), FB_WIDTH, FB_HEIGHT)
+            .update_with_buffer(&overlay, FB_WIDTH, FB_HEIGHT)
             .context("update window")?;
 
         if let Some((_handle, player_out)) = audio.as_ref() {
@@ -293,16 +321,16 @@ fn screen_size() -> (usize, usize) {
     (FB_WIDTH * 4, FB_HEIGHT * 4)
 }
 
-fn key_buttons(window: &minifb::Window) -> InputButtons {
+fn merge_buttons(keyboard: InputButtons, gamepad: InputButtons) -> InputButtons {
     InputButtons {
-        up: window.is_key_down(minifb::Key::Up) || window.is_key_down(minifb::Key::W),
-        down: window.is_key_down(minifb::Key::Down) || window.is_key_down(minifb::Key::S),
-        left: window.is_key_down(minifb::Key::Left) || window.is_key_down(minifb::Key::A),
-        right: window.is_key_down(minifb::Key::Right) || window.is_key_down(minifb::Key::D),
-        a: window.is_key_down(minifb::Key::Z) || window.is_key_down(minifb::Key::J),
-        b: window.is_key_down(minifb::Key::X) || window.is_key_down(minifb::Key::K),
-        start: window.is_key_down(minifb::Key::Enter),
-        select: window.is_key_down(minifb::Key::Space),
+        up: keyboard.up || gamepad.up,
+        down: keyboard.down || gamepad.down,
+        left: keyboard.left || gamepad.left,
+        right: keyboard.right || gamepad.right,
+        a: keyboard.a || gamepad.a,
+        b: keyboard.b || gamepad.b,
+        start: keyboard.start || gamepad.start,
+        select: keyboard.select || gamepad.select,
     }
 }
 
