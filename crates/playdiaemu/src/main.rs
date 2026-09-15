@@ -32,9 +32,9 @@ struct Cli {
     /// Run without opening a window
     #[arg(long)]
     headless: bool,
-    /// Number of frames to run (headless defaults to 180; window 0 = until closed)
-    #[arg(long)]
-    frames: Option<u32>,
+    /// Number of frames to run in headless mode
+    #[arg(long, default_value_t = 180)]
+    frames: u32,
     /// Take a screenshot after N frames and exit (saves as PNG)
     #[arg(short = 'S', long = "screenshot", value_name = "PATH")]
     screenshot: Option<PathBuf>,
@@ -62,27 +62,24 @@ fn main() -> Result<()> {
         bail!("provide a disc path (optional --headless)");
     };
 
-    // Screenshot implies headless, matching spmp8000-emu / dingoo-emu.
-    let headless = cli.headless || cli.screenshot.is_some();
-    let frames = if cli.screenshot.is_some() && cli.frames.is_none() {
-        cli.screenshot_frames
-    } else {
-        cli.frames.unwrap_or(if headless { 180 } else { 0 })
-    };
-
-    if headless {
-        run_hle_headless(
+    // Screenshot runs headless for --screenshot-frames, matching spmp8000-emu / dingoo-emu.
+    if cli.screenshot.is_some() || cli.headless {
+        let (frames, screenshot) = match cli.screenshot.as_deref() {
+            Some(path) => (cli.screenshot_frames, Some(path)),
+            None => (cli.frames, None),
+        };
+        return run_hle_headless(
             &disc,
             frames,
             cli.full_decode,
-            cli.screenshot.as_deref(),
+            screenshot,
             cli.dump_every,
             &cli.dump_dir,
             &cli.press_at,
-        )
-    } else {
-        run_window(&disc, frames, &cli)
+        );
     }
+
+    run_window(&disc, &cli)
 }
 
 fn run_hle_headless(
@@ -152,7 +149,7 @@ fn run_hle_headless(
     Ok(())
 }
 
-fn run_window(disc: &Path, max_frames: u32, cli: &Cli) -> Result<()> {
+fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
     if !disc.exists() {
         bail!("disc not found: {}", disc.display());
     }
@@ -238,13 +235,6 @@ fn run_window(disc: &Path, max_frames: u32, cli: &Cli) -> Result<()> {
         }
 
         frames += 1;
-        if max_frames > 0 && frames >= max_frames {
-            if let Some(path) = cli.screenshot.as_deref() {
-                save_screenshot_png(player.framebuffer(), path)?;
-                log::info!("wrote {}", path.display());
-            }
-            break;
-        }
         if stop == PlayerStop::EndOfDisc && frames > 8 {
             log::info!("end of disc");
             break;

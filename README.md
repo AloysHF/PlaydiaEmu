@@ -35,7 +35,7 @@ Research-grade but usable for disc playback:
 ### Standalone Mode (HLE, no BIOS)
 
 ```powershell
-cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 -S out.png
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 ```
 
 For a reproducible button choice in headless playback, add for example

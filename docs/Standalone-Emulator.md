@@ -30,13 +30,14 @@ playdia-emu [OPTIONS] DISC
 
 There are no subcommands. With a disc path and no `--headless`, the windowed
 HLE player opens. `--headless` runs the HLE disc player without a window
-(aligned with `spmp8000-emu` / `dingoo-emu`). Disc inspection lives in
+(aligned with `spmp8000-emu` / `dingoo-emu`). `-S/--screenshot` always runs
+headless for `--screenshot-frames` and exits. Disc inspection lives in
 `playdia-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
 ```powershell
-cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 -S out.png
+cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 ```
 
 ### HLE options
@@ -45,9 +46,9 @@ cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180 -S
 |---|---|---|
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
 | `--headless` | off | Run without opening a window |
-| `--frames N` | `180` (headless) | Host frames to run (~8 stream sectors each) |
+| `--frames N` | `180` | Host frames to run in headless mode (~8 stream sectors each) |
 | `-S, --screenshot PATH` | — | Take a screenshot after N frames and exit (PNG); implies headless |
-| `--screenshot-frames N` | `30` | Frames before the screenshot (used when `--frames` is omitted) |
+| `--screenshot-frames N` | `30` | Frames before the screenshot (overrides `--frames` when `-S` is set) |
 | `--dump-every N` | — | Periodic PPM dumps every N decoded frames |
 | `--dump-dir DIR` | `tmp/out` | Directory for periodic dumps |
 | `--full-decode` | off | Compatibility flag; native AK8000 decoding is already the default |
@@ -61,7 +62,7 @@ XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 2
 codes or damaged packets retain the previous frame. Rare VLC entries and
 hardware transform/color rounding still need validation.
 
-Example: `playdia-emu game.cue --headless --frames 180 --press-at 122:a -S scene.png`.
+Example: `playdia-emu game.cue --headless --frames 180 --press-at 122:a`.
 Frame numbers start at zero. Use a frame after a choice prompt appears; the
 `waiting=true` field in the progress output marks that state.
 
@@ -76,7 +77,7 @@ Example (private research corpus — do not commit discs):
 ```powershell
 cargo run --release -p playdiaemu -- `
   "tmp/iso/Mari-nee no Heya (Japan)/Mari-nee no Heya (Japan).cue" `
-  --headless --frames 90 -S tmp/out/mari.png
+  --headless --frames 90
 ```
 
 ## Window frontend
@@ -95,8 +96,9 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | `--fps N` | `30` | Target FPS |
 | `-v, --volume N` | `100` | Master audio volume (0–100; `0` disables audio) |
 | `--full-decode` | off | Compatibility flag; native decoding is already enabled |
-| `--frames N` | `0` | Quit after N host frames (`0` = until window closed) |
-| `-S, --screenshot PATH` | — | Save PNG when quitting via `--frames` |
+
+Window mode runs until the window is closed (or Esc / end of disc). `--frames`
+and `--screenshot` apply only to the headless path.
 
 ### Key mappings
 
