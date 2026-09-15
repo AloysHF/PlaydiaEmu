@@ -30,21 +30,21 @@ are truncated in the last row; all remaining packets pass strict decoding.
 Inspect a title:
 
 ```powershell
-cargo run --release -p playdiaemu -- inspect "tmp/iso/<title>/<title>.cue"
+cargo run --release -p playdia-tools --bin playdia-inspect -- "tmp/iso/<title>/<title>.cue"
 ```
 
 Play headlessly and dump a frame:
 
 ```powershell
-cargo run --release -p playdiaemu -- play `
+cargo run --release -p playdiaemu -- `
   "tmp/iso/<title>/<title>.cue" `
-  --frames 120 --dump-ppm tmp/out/<title>.ppm
+  --headless --frames 120
 ```
 
 Record:
 
 1. Whether the CUE loads
-2. Stream track number and F1/F2/F3 / audio sector counts from `inspect`
+2. Stream track number and F1/F2/F3 / audio sector counts from `playdia-inspect`
 3. Host frames run and whether the PPM is non-blank
 4. Approximate PCM sample count from logs
 

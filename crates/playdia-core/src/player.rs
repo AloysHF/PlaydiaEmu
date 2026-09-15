@@ -302,7 +302,8 @@ impl DiscPlayer {
         let mut destinations = [None; 7];
         for (i, dest) in destinations.iter_mut().enumerate() {
             let off = 3 + i * 4;
-            *dest = msf_to_lba(&data[off..off + 3]).filter(|&target| self.valid_target(target));
+            *dest = command_address_to_lba(&data[off..off + 3])
+                .filter(|&target| self.valid_target(target));
         }
         match data[1] {
             0x44 | 0x50 => {
@@ -450,28 +451,29 @@ impl DiscPlayer {
     }
 }
 
-fn msf_to_lba(msf: &[u8]) -> Option<u32> {
-    if msf.len() != 3 || msf[1] >= 60 || msf[2] >= 75 {
+fn command_address_to_lba(address: &[u8]) -> Option<u32> {
+    if address.len() != 3 || address[1] >= 60 {
         return None;
     }
-    (u32::from(msf[0]) * 4500 + u32::from(msf[1]) * 75 + u32::from(msf[2])).checked_sub(150)
+    // F2 uses binary minutes, seconds and five-sector units, not CD MSF frames.
+    (u32::from(address[0]) * 4500 + u32::from(address[1]) * 75 + u32::from(address[2]) * 5)
+        .checked_sub(150)
 }
 
 fn pressed_choice(buttons: InputButtons) -> Option<usize> {
-    if buttons.up {
+    // Six controller buttons precede the fallback destination.
+    if buttons.a || buttons.start {
+        Some(0)
+    } else if buttons.b {
         Some(1)
-    } else if buttons.down {
+    } else if buttons.right {
         Some(2)
     } else if buttons.left {
         Some(3)
-    } else if buttons.right {
+    } else if buttons.up {
         Some(4)
-    } else if buttons.a {
+    } else if buttons.down {
         Some(5)
-    } else if buttons.b {
-        Some(6)
-    } else if buttons.start {
-        Some(0)
     } else {
         None
     }

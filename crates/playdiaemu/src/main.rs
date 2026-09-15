@@ -1,342 +1,215 @@
 use anyhow::{bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::{
-    machine::{Machine, MachineConfig, RunStop},
-    DiscKind, InputButtons, FB_HEIGHT, FB_WIDTH,
-};
+use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 use rodio::buffer::SamplesBuffer;
 use rodio::{DeviceSinkBuilder, Player};
 use std::num::NonZero;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+
+mod gamepad;
+mod gamepad_overlay;
+mod keyboard;
+
+use gamepad::GamepadMapper;
+use keyboard::{KeyboardMapper, RemapSpec};
 
 #[derive(Parser)]
 #[command(
     name = "playdia-emu",
-    about = "Playdia standalone emulator (HLE disc player + LLE shell)"
+    about = "Playdia standalone emulator (HLE disc player)",
+    version
 )]
 struct Cli {
-    /// Open a window and play this disc (used when no subcommand is given)
+    /// Path to .cue (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
     /// Window scale factor (native is 320x240)
-    #[arg(long, default_value_t = 3)]
+    #[arg(
+        short,
+        long,
+        default_value_t = 1,
+        value_parser = clap::value_parser!(u32).range(1..=8)
+    )]
     scale: u32,
+    /// Run in fullscreen mode
+    #[arg(short, long)]
+    fullscreen: bool,
     /// Target FPS for the window frontend
     #[arg(long, default_value_t = 30)]
     fps: u32,
-    /// Compatibility flag; native AK8000 decoding is already enabled
+    /// Master audio volume (0-100)
+    #[arg(short, long, default_value_t = 100, value_parser = clap::value_parser!(u8).range(0..=100))]
+    volume: u8,
+    /// Remap a Playdia button using BUTTON:KEY syntax
+    #[arg(long = "remap", value_name = "BUTTON:KEY")]
+    remappings: Vec<RemapSpec>,
+    /// Swap the emulated A and B buttons
+    #[arg(long = "swap-ab")]
+    swap_ab: bool,
+    /// Disable physical gamepad input (keyboard remains available)
     #[arg(long)]
-    full_decode: bool,
-    /// Mute host audio (window mode)
+    no_gamepad: bool,
+    /// Show the current Playdia button state over the game frame
     #[arg(long)]
-    mute: bool,
-    /// Quit window mode after N host frames (0 = until closed)
-    #[arg(long, default_value_t = 0)]
+    show_gamepad: bool,
+    /// Enable emulator debug logging
+    #[arg(long)]
+    debug_logging: bool,
+    /// Run without opening a window
+    #[arg(long)]
+    headless: bool,
+    /// Number of frames to run in headless mode
+    #[arg(long, default_value_t = 180)]
     frames: u32,
-    /// Save PPM when quitting window mode via --frames
+    /// Take a screenshot after N frames and exit (saves as PNG)
+    #[arg(short = 'S', long = "screenshot", value_name = "PATH")]
+    screenshot: Option<PathBuf>,
+    /// Number of frames to run before taking screenshot
+    #[arg(long = "screenshot-frames", default_value_t = 30)]
+    screenshot_frames: u32,
+    /// Dump every Nth decoded frame as PPM into this directory (headless)
     #[arg(long)]
-    dump_ppm: Option<PathBuf>,
-    #[command(subcommand)]
-    cmd: Option<Cmd>,
-}
-
-#[derive(Subcommand)]
-enum Cmd {
-    /// Inspect a CUE/BIN or raw disc image.
-    Inspect { disc: PathBuf },
-    /// HLE disc player: stream Track 2 video/audio without BIOS (headless).
-    Play {
-        /// Path to .cue (preferred) or raw .bin/.iso
-        disc: PathBuf,
-        #[arg(long, default_value_t = 180)]
-        frames: u32,
-        /// Dump final framebuffer as PPM after the run.
-        #[arg(long)]
-        dump_ppm: Option<PathBuf>,
-        /// Dump every Nth decoded frame as PPM into this directory.
-        #[arg(long)]
-        dump_every: Option<u32>,
-        /// Dump directory for periodic frames (with --dump-every).
-        #[arg(long, default_value = "tmp/out")]
-        dump_dir: PathBuf,
-        /// Compatibility flag; native AK8000 decoding is already enabled.
-        #[arg(long)]
-        full_decode: bool,
-        /// Press a button at a host frame, e.g. --press-at 120:a.
-        #[arg(long = "press-at", value_parser = parse_press_at)]
-        press_at: Vec<(u32, InputButtons)>,
-    },
-    /// LLE-oriented headless (SH-1 + bus). Prefer `play` for disc playback.
-    Headless {
-        disc: PathBuf,
-        #[arg(long)]
-        bios: Option<PathBuf>,
-        #[arg(long, default_value_t = 60)]
-        frames: u32,
-        #[arg(long)]
-        allow_placeholder_bios: bool,
-        #[arg(long)]
-        audio_test_tone: bool,
-        #[arg(long)]
-        save_state: Option<PathBuf>,
-        #[arg(long)]
-        load_state: Option<PathBuf>,
-        #[arg(long)]
-        dump_fb: Option<PathBuf>,
-    },
+    dump_every: Option<u32>,
+    /// Directory for periodic dumps (with --dump-every)
+    #[arg(long, default_value = "tmp/out")]
+    dump_dir: PathBuf,
+    /// Press a button at a host frame, e.g. --press-at 120:a (headless)
+    #[arg(long = "press-at", value_parser = parse_press_at)]
+    press_at: Vec<(u32, InputButtons)>,
 }
 
 fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let cli = Cli::parse();
-    match cli.cmd {
-        None => {
-            let Some(disc) = cli.disc else {
-                bail!("provide a disc path, or a subcommand (inspect / play / headless)");
-            };
-            run_window(
-                &disc,
-                cli.scale,
-                cli.fps,
-                cli.full_decode,
-                cli.mute,
-                cli.frames,
-                cli.dump_ppm.as_ref(),
-            )
-        }
-        Some(Cmd::Inspect { disc }) => {
-            let d = playdia_core::DiscImage::from_path(&disc).context("load disc")?;
-            println!("kind={:?}", d.kind);
-            println!("total_sectors={}", d.total_sectors);
-            println!("crc32={:08x}", d.crc);
-            for t in &d.tracks {
-                println!(
-                    "track{} sectors={} mode2={} bytes={}",
-                    t.number,
-                    t.sectors,
-                    t.mode2,
-                    t.data.len()
-                );
-            }
-            // Sample first track sectors for ISO + stream track markers.
-            if let Some(t) = d.data_track() {
-                if t.sectors > 16 {
-                    let sec = &t.data[16 * 2352..17 * 2352];
-                    let sig = &sec[25..30];
-                    println!(
-                        "pvd_sig={:?} volume={:?}",
-                        String::from_utf8_lossy(sig),
-                        String::from_utf8_lossy(&sec[40..72])
-                    );
-                }
-            }
-            if let Some(t) = d.stream_track() {
-                let mut f1 = 0u32;
-                let mut f2 = 0u32;
-                let mut f3 = 0u32;
-                let mut aud = 0u32;
-                for i in 0..t.sectors.min(8000) {
-                    let o = i as usize * 2352;
-                    if o + 25 >= t.data.len() {
-                        break;
-                    }
-                    let sm = t.data[o + 18];
-                    let mk = t.data[o + 24];
-                    if sm & 0x04 != 0 {
-                        aud += 1;
-                    } else if sm & 0x08 != 0 {
-                        match mk {
-                            0xF1 => f1 += 1,
-                            0xF2 => f2 += 1,
-                            0xF3 => f3 += 1,
-                            _ => {}
-                        }
-                    }
-                }
-                println!(
-                    "stream_track={} f1={} f2={} f3={} audio={}",
-                    t.number, f1, f2, f3, aud
-                );
-            }
-            Ok(())
-        }
-        Some(Cmd::Play {
-            disc,
+    let default_log_filter = if cli.debug_logging { "debug" } else { "info" };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_log_filter))
+        .init();
+    let Some(disc) = cli.disc.clone() else {
+        bail!("provide a disc path (optional --headless)");
+    };
+
+    // Screenshot runs headless for --screenshot-frames, matching spmp8000-emu / dingoo-emu.
+    if cli.screenshot.is_some() || cli.headless {
+        let (frames, screenshot) = match cli.screenshot.as_deref() {
+            Some(path) => (cli.screenshot_frames, Some(path)),
+            None => (cli.frames, None),
+        };
+        return run_hle_headless(
+            &disc,
             frames,
-            dump_ppm,
-            dump_every,
-            dump_dir,
-            full_decode,
-            press_at,
-        }) => {
-            let mut p = DiscPlayer::new();
-            if full_decode {
-                p.video.params.ac_dequant = 1;
-            }
-            p.load_path(&disc).context("load disc")?;
-            if let Some(dir) = dump_every.map(|_| dump_dir.clone()) {
-                std::fs::create_dir_all(&dir).ok();
-            }
-            let mut dumped = 0u32;
-            for i in 0..frames {
-                let mut held = InputButtons::default();
-                for &(at, buttons) in &press_at {
-                    if at == i {
-                        held = buttons;
-                    }
-                }
-                p.set_input(held);
-                let previous_frames = p.video.frames_decoded;
-                let stop = p.run_frame();
-                if let Some(n) = dump_every {
-                    if n > 0
-                        && p.video.frames_decoded > previous_frames
-                        && p.video.frames_decoded.is_multiple_of(n as u64)
-                    {
-                        let path = dump_dir.join(format!("frame_{:05}.ppm", dumped));
-                        p.video.dump_ppm(&path)?;
-                        println!("wrote {}", path.display());
-                        dumped += 1;
-                    }
-                }
-                if stop != PlayerStop::Ok {
-                    log::warn!("stop={stop:?} at host_frame {}", p.frame);
-                    break;
-                }
-                if i % 30 == 0 {
-                    println!("host_frame={} {}", i, p.stats_line());
-                }
-            }
-            if let Some(path) = dump_ppm {
-                p.video.dump_ppm(&path)?;
-                println!("wrote {}", path.display());
-            }
-            let audio = p.drain_audio();
-            println!(
-                "DONE {} audio_samples={} track_idx={} interactive={}",
-                p.stats_line(),
-                audio.len(),
-                p.track_index,
-                p.interactive.len()
-            );
-            if p.video.frames_decoded == 0 {
-                bail!("no video frames decoded (failed={})", p.video.frames_failed);
-            }
-            Ok(())
-        }
-        Some(Cmd::Headless {
-            disc,
-            bios,
-            frames,
-            allow_placeholder_bios,
-            audio_test_tone,
-            save_state,
-            load_state,
-            dump_fb,
-        }) => {
-            let cfg = MachineConfig {
-                allow_placeholder_bios,
-                enable_xa_stream: true,
-                audio_test_tone,
-            };
-            let mut m = Machine::new(cfg);
-            if let Some(bios) = bios {
-                m.load_bios_path(&bios).context("load bios")?;
-            } else if !allow_placeholder_bios {
-                bail!("--bios is required unless --allow-placeholder-bios is set");
-            }
-            m.load_disc_path(&disc).context("load disc")?;
-            m.reset();
-            if let Some(path) = load_state {
-                let bytes = std::fs::read(&path).context("read state")?;
-                m.load_state(&bytes).context("load state")?;
-            }
-            for _ in 0..frames {
-                let stop = m.run_frame();
-                if stop != RunStop::Ok {
-                    log::warn!("stop={stop:?} at frame {}", m.frame);
-                    break;
-                }
-            }
-            let fb_crc = {
-                let bytes: Vec<u8> = m
-                    .framebuffer()
-                    .iter()
-                    .flat_map(|p| p.to_le_bytes())
-                    .collect();
-                playdia_core::state::crc32(&bytes)
-            };
-            let audio = m.drain_audio();
-            println!(
-                "frames={} fb_crc={fb_crc:08x} audio_samples={} cpu_pc={:08x} stopped={:?}",
-                m.frame,
-                audio.len(),
-                m.cpu.pc,
-                m.cpu.stopped
-            );
-            if let Some(path) = dump_fb {
-                let bytes: Vec<u8> = m
-                    .framebuffer()
-                    .iter()
-                    .flat_map(|p| p.to_le_bytes())
-                    .collect();
-                std::fs::write(path, bytes)?;
-            }
-            if let Some(path) = save_state {
-                std::fs::write(path, m.save_state())?;
-            }
-            let _ = (
-                FB_WIDTH,
-                FB_HEIGHT,
-                InputButtons::default(),
-                DiscKind::SingleRaw,
-            );
-            Ok(())
-        }
+            screenshot,
+            cli.dump_every,
+            &cli.dump_dir,
+            &cli.press_at,
+        );
     }
+
+    run_window(&disc, &cli)
 }
 
-fn run_window(
-    disc: &std::path::Path,
-    scale: u32,
-    fps: u32,
-    full_decode: bool,
-    mute: bool,
-    max_frames: u32,
-    dump_ppm: Option<&PathBuf>,
+fn run_hle_headless(
+    disc: &Path,
+    frames: u32,
+    screenshot: Option<&Path>,
+    dump_every: Option<u32>,
+    dump_dir: &Path,
+    press_at: &[(u32, InputButtons)],
 ) -> Result<()> {
+    let mut p = DiscPlayer::new();
+    p.load_path(disc).context("load disc")?;
+    if let Some(n) = dump_every {
+        if n > 0 {
+            std::fs::create_dir_all(dump_dir).ok();
+        }
+    }
+    let mut dumped = 0u32;
+    for i in 0..frames {
+        let mut held = InputButtons::default();
+        for &(at, buttons) in press_at {
+            if at == i {
+                held = buttons;
+            }
+        }
+        p.set_input(held);
+        let previous_frames = p.video.frames_decoded;
+        let stop = p.run_frame();
+        if let Some(n) = dump_every {
+            if n > 0
+                && p.video.frames_decoded > previous_frames
+                && p.video.frames_decoded.is_multiple_of(n as u64)
+            {
+                let path = dump_dir.join(format!("frame_{:05}.ppm", dumped));
+                p.video.dump_ppm(&path)?;
+                println!("wrote {}", path.display());
+                dumped += 1;
+            }
+        }
+        if stop != PlayerStop::Ok {
+            log::warn!("stop={stop:?} at host_frame {}", p.frame);
+            break;
+        }
+        if i % 30 == 0 {
+            println!("host_frame={} {}", i, p.stats_line());
+        }
+    }
+    if let Some(path) = screenshot {
+        save_screenshot_png(p.framebuffer(), path)?;
+        println!("wrote {}", path.display());
+    }
+    let audio = p.drain_audio();
+    println!(
+        "DONE {} audio_samples={} track_idx={} interactive={}",
+        p.stats_line(),
+        audio.len(),
+        p.track_index,
+        p.interactive.len()
+    );
+    if p.video.frames_decoded == 0 {
+        bail!("no video frames decoded (failed={})", p.video.frames_failed);
+    }
+    Ok(())
+}
+
+fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
     if !disc.exists() {
         bail!("disc not found: {}", disc.display());
     }
 
     log::info!("Loading {}", disc.display());
     let mut player = DiscPlayer::new();
-    if full_decode {
-        player.video.params.ac_dequant = 1;
-    }
     player.load_path(disc).context("failed to load disc")?;
 
-    let scale = scale.clamp(1, 8) as usize;
+    let scale = cli.scale as usize;
+    let (window_width, window_height) = if cli.fullscreen {
+        screen_size()
+    } else {
+        (FB_WIDTH * scale, FB_HEIGHT * scale)
+    };
     let mut window = minifb::Window::new(
         "PlaydiaEmu",
-        playdia_core::FB_WIDTH * scale,
-        playdia_core::FB_HEIGHT * scale,
+        window_width,
+        window_height,
         minifb::WindowOptions {
-            resize: true,
+            resize: !cli.fullscreen,
+            borderless: cli.fullscreen,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             ..Default::default()
         },
     )
     .context("failed to create window")?;
-    window.set_target_fps(fps.max(1) as usize);
+    window.set_target_fps(cli.fps.max(1) as usize);
+    if cli.fullscreen {
+        window.topmost(true);
+        window.set_position(0, 0);
+    }
 
-    let audio = if mute {
+    let audio = if cli.volume == 0 {
         None
     } else {
         match DeviceSinkBuilder::open_default_sink() {
             Ok(handle) => {
                 let out = Player::connect_new(handle.mixer());
+                out.set_volume(f32::from(cli.volume) / 100.0);
                 Some((handle, out))
             }
             Err(e) => {
@@ -346,26 +219,32 @@ fn run_window(
         }
     };
 
-    let frame_dt = Duration::from_millis((1000 / fps.max(1)) as u64);
+    let frame_dt = Duration::from_millis((1000 / cli.fps.max(1)) as u64);
     log::info!(
-        "Window {}x{} fps={}  Esc=quit  Arrows/WASD  Z/J=A  X/K=B  Enter=Start  Space=Select",
-        playdia_core::FB_WIDTH * scale,
-        playdia_core::FB_HEIGHT * scale,
-        fps
+        "Window {}x{} fps={} volume={}  Esc=quit  Arrows  Z=A  X=B  Enter=Start  Space=Select",
+        window_width,
+        window_height,
+        cli.fps,
+        cli.volume
     );
 
+    let keyboard = KeyboardMapper::new(&cli.remappings, cli.swap_ab);
+    let mut gamepad = GamepadMapper::new(!cli.no_gamepad, cli.swap_ab);
     let mut frames = 0u32;
+    let mut overlay = player.framebuffer().to_vec();
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
         let t0 = Instant::now();
-        player.set_input(key_buttons(&window));
+        let buttons = merge_buttons(keyboard.pressed_buttons(&window), gamepad.pressed_buttons());
+        player.set_input(buttons);
         let stop = player.run_frame();
 
+        overlay.clear();
+        overlay.extend_from_slice(player.framebuffer());
+        if cli.show_gamepad {
+            gamepad_overlay::draw(&mut overlay, FB_WIDTH, FB_HEIGHT, buttons);
+        }
         window
-            .update_with_buffer(
-                player.framebuffer(),
-                playdia_core::FB_WIDTH,
-                playdia_core::FB_HEIGHT,
-            )
+            .update_with_buffer(&overlay, FB_WIDTH, FB_HEIGHT)
             .context("update window")?;
 
         if let Some((_handle, player_out)) = audio.as_ref() {
@@ -383,13 +262,6 @@ fn run_window(
         }
 
         frames += 1;
-        if max_frames > 0 && frames >= max_frames {
-            if let Some(path) = dump_ppm {
-                player.video.dump_ppm(path)?;
-                log::info!("wrote {}", path.display());
-            }
-            break;
-        }
         if stop == PlayerStop::EndOfDisc && frames > 8 {
             log::info!("end of disc");
             break;
@@ -408,16 +280,51 @@ fn run_window(
     Ok(())
 }
 
-fn key_buttons(window: &minifb::Window) -> InputButtons {
+fn save_screenshot_png(framebuffer: &[u32], path: &Path) -> Result<()> {
+    let mut img = image::RgbaImage::new(FB_WIDTH as u32, FB_HEIGHT as u32);
+    for (i, &px) in framebuffer.iter().enumerate() {
+        let r = ((px >> 16) & 0xFF) as u8;
+        let g = ((px >> 8) & 0xFF) as u8;
+        let b = (px & 0xFF) as u8;
+        let x = (i % FB_WIDTH) as u32;
+        let y = (i / FB_WIDTH) as u32;
+        img.put_pixel(x, y, image::Rgba([r, g, b, 0xFF]));
+    }
+    img.save(path).context("save screenshot")?;
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn screen_size() -> (usize, usize) {
+    #[allow(non_snake_case)]
+    extern "system" {
+        fn GetSystemMetrics(index: i32) -> i32;
+    }
+    const SM_CXSCREEN: i32 = 0;
+    const SM_CYSCREEN: i32 = 1;
+    unsafe {
+        (
+            GetSystemMetrics(SM_CXSCREEN) as usize,
+            GetSystemMetrics(SM_CYSCREEN) as usize,
+        )
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn screen_size() -> (usize, usize) {
+    (FB_WIDTH * 4, FB_HEIGHT * 4)
+}
+
+fn merge_buttons(keyboard: InputButtons, gamepad: InputButtons) -> InputButtons {
     InputButtons {
-        up: window.is_key_down(minifb::Key::Up) || window.is_key_down(minifb::Key::W),
-        down: window.is_key_down(minifb::Key::Down) || window.is_key_down(minifb::Key::S),
-        left: window.is_key_down(minifb::Key::Left) || window.is_key_down(minifb::Key::A),
-        right: window.is_key_down(minifb::Key::Right) || window.is_key_down(minifb::Key::D),
-        a: window.is_key_down(minifb::Key::Z) || window.is_key_down(minifb::Key::J),
-        b: window.is_key_down(minifb::Key::X) || window.is_key_down(minifb::Key::K),
-        start: window.is_key_down(minifb::Key::Enter),
-        select: window.is_key_down(minifb::Key::Space),
+        up: keyboard.up || gamepad.up,
+        down: keyboard.down || gamepad.down,
+        left: keyboard.left || gamepad.left,
+        right: keyboard.right || gamepad.right,
+        a: keyboard.a || gamepad.a,
+        b: keyboard.b || gamepad.b,
+        start: keyboard.start || gamepad.start,
+        select: keyboard.select || gamepad.select,
     }
 }
 

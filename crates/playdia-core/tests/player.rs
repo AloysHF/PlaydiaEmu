@@ -81,7 +81,7 @@ fn interactive_disc(command: u8) -> DiscImage {
     for button in 0..7 {
         let off = 27 + button * 4;
         cmd[off + 1] = 4;
-        cmd[off + 2] = if button == 5 { 30 } else { 20 };
+        cmd[off + 2] = if button == 0 { 6 } else { 4 };
     }
     DiscImage {
         cue_path: None,
@@ -115,9 +115,10 @@ fn interactive_jump_uses_disc_lba_and_discards_prefetch() {
     assert_eq!(player.run_frame(), PlayerStop::Ok);
     assert_eq!(player.interactive[0].0, 11);
     assert_eq!(player.demux.interactive_cmds, 1);
-    assert_eq!(player.track_index, 160);
+    // destinations[0] uses S=4 F=6 → LBA 180; track_index = 180 - base(10) = 170.
+    assert_eq!(player.track_index, 170);
     assert_eq!(player.run_frame(), PlayerStop::Ok);
-    assert_eq!(player.track_index, 168);
+    assert_eq!(player.track_index, 178);
 }
 
 #[test]
@@ -165,5 +166,107 @@ fn interactive_video_is_finished_and_presented_before_control() {
         assert!(!player.video.present_next());
         assert_eq!(player.is_waiting_for_input(), command == 0x44);
         assert_eq!(player.demux.interactive_cmds, 1);
+    }
+}
+
+#[test]
+fn b_choices_reach_complete_pictures_without_replaying_the_prompt() {
+    for single_track in [false, true] {
+        let mut disc = interactive_disc(0x44);
+        for (index, target, level) in [(0, [0, 2, 8], 0), (30, [0, 3, 1], 8), (70, [0, 3, 1], 16)] {
+            let picture = common::picture(|row, _, bits| {
+                if row < 2 {
+                    common::escape(bits, 0, level);
+                }
+                common::put(bits, 1, 2);
+            });
+            let raw = &mut disc.tracks[1].data;
+            let f1 = &mut raw[index * 2352 + 24..index * 2352 + 2072];
+            f1[0] = 0xF1;
+            f1[1..].copy_from_slice(&picture[..2047]);
+            let f2 = &mut raw[(index + 1) * 2352..(index + 2) * 2352];
+            f2[18] = 0x09;
+            f2[24] = 0xF2;
+            f2[25] = 0x44;
+            // Every other slot returns to the title; B advances to a new picture.
+            for slot in 0..7 {
+                let off = 27 + slot * 4;
+                f2[off..off + 3].copy_from_slice(&[0, 2, 2]);
+            }
+            f2[31..34].copy_from_slice(&target);
+            let tail = &mut f2[24 + 0x23..2072];
+            tail.fill(0xFF);
+            tail[..picture.len() - 2047].copy_from_slice(&picture[2047..]);
+        }
+        let mut player = DiscPlayer::new();
+        if single_track {
+            player
+                .load_bytes(
+                    disc.tracks
+                        .into_iter()
+                        .flat_map(|track| track.data)
+                        .collect(),
+                )
+                .unwrap();
+            player.sector_cursor = 10;
+        } else {
+            player.disc = Some(disc);
+        }
+        assert_eq!(player.run_frame(), PlayerStop::Ok);
+        let title_crc = player.frame_crc();
+        let b = InputButtons {
+            b: true,
+            ..Default::default()
+        };
+        player.set_input(b);
+        assert_eq!(player.run_frame(), PlayerStop::Ok);
+        assert_eq!(player.interactive.last().unwrap().0, 41);
+        assert!(player.is_waiting_for_input());
+        assert_ne!(player.frame_crc(), title_crc);
+        let menu_crc = player.frame_crc();
+        player.set_input(b);
+        player.run_frame();
+        assert_eq!(player.frame_crc(), menu_crc);
+        assert_eq!(player.interactive.len(), 2);
+        player.set_input(InputButtons::default());
+        player.run_frame();
+        player.set_input(b);
+        assert_eq!(player.run_frame(), PlayerStop::Ok);
+        assert_eq!(player.interactive.last().unwrap().0, 81);
+        assert_ne!(player.frame_crc(), menu_crc);
+        assert_eq!(player.video.frames_decoded, 3);
+        assert_eq!(player.video.frames_failed, 0);
+    }
+}
+
+#[test]
+fn horizontal_choices_use_the_disc_button_order() {
+    for (buttons, slot) in [
+        (
+            InputButtons {
+                right: true,
+                ..Default::default()
+            },
+            2,
+        ),
+        (
+            InputButtons {
+                left: true,
+                ..Default::default()
+            },
+            3,
+        ),
+    ] {
+        let mut disc = interactive_disc(0x44);
+        for index in 0..7 {
+            disc.tracks[1].data[2352 + 29 + index * 4] = 4 + index as u8;
+        }
+        let mut player = DiscPlayer::new();
+        player.disc = Some(disc);
+        player.run_frame();
+        player.set_input(buttons);
+        player.run_frame();
+        assert_eq!(player.track_index, 160 + slot * 5 + 8);
+        assert!(!player.is_waiting_for_input());
     }
 }

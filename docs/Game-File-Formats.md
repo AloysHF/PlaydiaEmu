@@ -105,7 +105,7 @@ An independent survey of 35 data-track discs found the expected initial packet
 prefix in all 900,268 assembled video packets; it did not validate picture decode.
 The old 192×144 preview is retained for the parameter-sweep research tool via
 `CodecParams::legacy_preview`. Its bit-order and AC options do not affect
-native playback. `--full-decode` remains a CLI compatibility flag.
+native playback.
 
 ## Memory map (LLE / hardware access dump)
 
