@@ -18,7 +18,7 @@ struct Cli {
     /// Path to .cue (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
     /// Window scale factor (native is 320x240)
-    #[arg(short, long, default_value_t = 3)]
+    #[arg(short, long, default_value_t = 1)]
     scale: u32,
     /// Run in fullscreen mode
     #[arg(short, long)]

@@ -90,7 +90,7 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | Option | Default | Description |
 |---|---|---|
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
-| `-s, --scale N` | `3` | Window scale factor (native 320×240, clamp 1–8) |
+| `-s, --scale N` | `1` | Window scale factor (native 320×240, clamp 1–8) |
 | `-f, --fullscreen` | off | Borderless fullscreen |
 | `--fps N` | `30` | Target FPS |
 | `-v, --volume N` | `100` | Master audio volume (0–100; `0` disables audio) |
