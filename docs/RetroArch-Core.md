@@ -37,23 +37,20 @@ core metadata.
 
 1. Open RetroArch and select **Load Core > Playdia (PlaydiaEmu)**.
 2. Select **Load Content**.
-3. Choose a `.cue`, `.iso`, or `.bin` disc image.
+3. Choose a `.cue` (preferred), `.iso`, or raw `.bin` disc image.
 
 > The core advertises `cue|iso|bin` and requires the full content path
-> (`need_fullpath`). Dual-track CUE/BIN support via the libretro front is
-> limited compared with the standalone HLE `--headless` path — prefer the standalone
-> HLE player for real Redump CUE/BIN titles.
+> (`need_fullpath`). Content loading uses the same HLE `DiscPlayer` path as
+> the standalone emulator: dual-track MODE2 CUE/BIN, F1/F2/F3 routing, XA
+> audio. No BIOS is required.
 
 ## Supported Features
 
+- HLE disc player (`DiscPlayer`) aligned with the standalone emulator
 - Video output using XRGB8888 (320×240, eight bits per channel, 1,280-byte row pitch)
 - Stereo audio output at 44100 Hz
-- RetroPad input handling
-- Save states via libretro serialize / unserialize (version 2; version 1 states are rejected)
-- LLE machine path (`Machine`) rather than the standalone HLE `DiscPlayer`
-
-The frontend must accept `RETRO_PIXEL_FORMAT_XRGB8888`; loading fails if it
-rejects the format. No RGB555 fallback reduces the decoded channel precision.
+- RetroPad input handling (including interactive F2 choice mapping)
+- Host pacing at 30 fps (matches standalone HLE video slot rate)
 
 ## RetroPad Button Mapping
 
@@ -66,29 +63,24 @@ rejects the format. No RGB555 fallback reduces the decoded channel precision.
 | Select | Select |
 | X / Y | Unused |
 
+At interactive F2 choice screens the same mapping selects destinations:
+A/Start, B, Right, Left, Up, Down.
+
 ## Timing
 
 | Field | Value |
 |-------|-------|
 | Base resolution | 320×240 |
 | Aspect ratio | 4:3 |
-| Frame rate | 60 fps (core AV info) |
+| Frame rate | 30 fps (HLE host frames; matches standalone) |
 | Sample rate | 44100 Hz |
-
-> Standalone HLE playback targets ~30 host frames/sec for disc video. The
-> libretro AV info currently reports 60 fps while driving the LLE machine;
-> treat this as a shell until content loading is fully aligned with the HLE
-> player.
 
 ## Limitations
 
 - No core options UI yet
 - Cheats are stubbed (`retro_cheat_*` no-ops)
+- No save states (HLE player has no machine state blob; matches standalone)
 - No Android / iOS / webOS packaging docs yet
-- Content loading is not yet the same dual-track HLE path as the standalone `--headless` player
-- BIOS is still required for retail LLE boot
-- The shared core includes native AK8000 picture decoding; this does not remove
-  the libretro content-loading and LLE boot limitations above
 
 ## Building notes
 

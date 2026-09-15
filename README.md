@@ -60,8 +60,10 @@ Build the libretro core and load a disc image through RetroArch's
 cargo build --release -p playdiaemu-libretro
 ```
 
-See the [RetroArch Core](docs/RetroArch-Core.md) guide for installation,
-RetroPad mapping, supported features, and current limitations.
+The libretro core uses the same HLE disc player as the standalone emulator
+(dual-track MODE2 CUE/BIN, F1/F2/F3, XA audio; no BIOS). See the
+[RetroArch Core](docs/RetroArch-Core.md) guide for installation, RetroPad
+mapping, supported features, and current limitations.
 
 ## Building
 
