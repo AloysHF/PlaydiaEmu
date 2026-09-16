@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use minifb::{Key, Window};
-use playdia_core::InputButtons;
+use playdiaemu_core::InputButtons;
 
 const DEFAULT_MAPPINGS: &[(PlaydiaButton, Key)] = &[
     (PlaydiaButton::Up, Key::Up),

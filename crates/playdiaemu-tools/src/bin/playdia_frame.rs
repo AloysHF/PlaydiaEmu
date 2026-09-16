@@ -1,9 +1,9 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use playdia_core::cd::{XaDemux, XaPacket};
-use playdia_core::content::{parse_raw_sector, DiscImage};
-use playdia_core::video::ak8000;
-use playdia_core::video::structure::{video_fragment, VIDEO_PACKET_CAP};
+use playdiaemu_core::cd::{XaDemux, XaPacket};
+use playdiaemu_core::content::{parse_raw_sector, DiscImage};
+use playdiaemu_core::video::ak8000;
+use playdiaemu_core::video::structure::{video_fragment, VIDEO_PACKET_CAP};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 

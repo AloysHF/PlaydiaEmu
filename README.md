@@ -28,7 +28,7 @@ Research-grade but usable for disc playback:
 - **Save states** — content identity + CRC envelope; version 2 preserves RGB888 pixels (version 1 states are rejected)
 - **Headless / inspect tooling** — sector and packet diagnostics without a window
 - **RetroArch integration** — libretro core for frontend use
-- **Cross-crate core** — platform-independent `playdia-core` with no host I/O
+- **Cross-crate core** — platform-independent `playdiaemu-core` with no host I/O
 
 ## Usage
 
@@ -103,11 +103,11 @@ directory.
 ### Tools
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue
 ```
 
 For video packet header frequencies, run
-`cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers`.
+`cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-headers`.
 Add `--video-candidates` to rank packets by low body-byte entropy and long
 `0x55`/`0xAA` runs. The reported track-relative LBAs help target codec research;
 these patterns do not establish decoded pixels or a VLC table.
@@ -122,8 +122,8 @@ Its counts are research diagnostics, not decoded coefficients or game pixels.
 Decode a specific picture without navigating the game, or validate a whole disc:
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
 ```
 
 Packet numbers start at 1 and include interactive F2 packets. The frame tool
@@ -148,7 +148,7 @@ decode or visual check; debug builds are for unit tests and fast iteration only.
 
 ```
 crates/
-├── playdia-core/            # Platform-independent emulator engine (library)
+├── playdiaemu-core/            # Platform-independent emulator engine (library)
 │   └── src/
 │       ├── lib.rs           # Crate root
 │       ├── machine.rs       # LLE machine (SH-1 + bus + CDXA device)
@@ -171,7 +171,7 @@ crates/
 ├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
 │   ├── playdiaemu_libretro.info
 │   └── src/lib.rs           # libretro C ABI
-└── playdia-tools/           # ISO/XA inspector and research utilities
+└── playdiaemu-tools/           # ISO/XA inspector and research utilities
     └── src/bin/
         ├── playdia_inspect.rs
         └── playdia_scan.rs

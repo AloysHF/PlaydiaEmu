@@ -10,7 +10,7 @@ name = "playdia-emu"
 path = "src/main.rs"
 
 [dependencies]
-playdia-core = { path = "../playdia-core" }
+playdiaemu-core = { path = "../playdiaemu-core" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 env_logger = { workspace = true }

@@ -13,5 +13,5 @@ name = "playdiaemu"
 crate-type = ["cdylib"]
 
 [dependencies]
-playdia-core = { path = "../playdia-core" }
+playdiaemu-core = { path = "../playdiaemu-core" }
 log = { workspace = true }

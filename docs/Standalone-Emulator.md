@@ -32,7 +32,7 @@ There are no subcommands. With a disc path and no `--headless`, the windowed
 HLE player opens. `--headless` runs the HLE disc player without a window
 (aligned with `spmp8000-emu` / `dingoo-emu`). `-S/--screenshot` always runs
 headless for `--screenshot-frames` and exits. Disc inspection lives in
-`playdia-tools` (`playdia-inspect`).
+`playdiaemu-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
@@ -118,15 +118,15 @@ Use `--remap` to replace a binding (for example `--remap a:space`). Escape is re
 
 ## Inspect
 
-Disc inspection is provided by `playdia-tools` (`playdia-inspect`). Print disc
+Disc inspection is provided by `playdiaemu-tools` (`playdia-inspect`). Print disc
 kind, tracks, CRC, ISO volume label sample, and stream-track F1/F2/F3 / audio
 sector counts:
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue
-cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-headers
-cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-rows
-cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-candidates
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-headers
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-rows
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-candidates
 ```
 
 The video commands assemble F1/F2 packets without exporting video data. The
@@ -144,8 +144,8 @@ Its optional `--candidate-family` and `--gamma` rules remain unverified.
 For native picture output and strict entropy validation:
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
 ```
 
 This tool reads pictures in disc order without following scene commands.

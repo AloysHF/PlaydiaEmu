@@ -1,4 +1,4 @@
-//! Playdia libretro core — thin C ABI shell over the HLE DiscPlayer.
+//! Playdia libretro core 鈥?thin C ABI shell over the HLE DiscPlayer.
 
 #![allow(dead_code)]
 #![allow(static_mut_refs)]
@@ -10,7 +10,7 @@ mod constants;
 mod logger;
 mod types;
 
-use playdia_core::player::DiscPlayer;
+use playdiaemu_core::player::DiscPlayer;
 use std::sync::Mutex;
 
 pub(crate) static CORE: Mutex<Option<DiscPlayer>> = Mutex::new(None);

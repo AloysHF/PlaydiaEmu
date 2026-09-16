@@ -1,4 +1,4 @@
-use playdia_core::InputButtons;
+use playdiaemu_core::InputButtons;
 
 const IDLE: u32 = 0x00404040;
 const PRESSED: u32 = 0x0000d8ff;

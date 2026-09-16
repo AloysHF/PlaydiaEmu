@@ -3,8 +3,8 @@
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use playdia_core::player::DiscPlayer;
-use playdia_core::video::{pack_rgb888, unpack_rgb888, CodecParams, VideoDecoder};
+use playdiaemu_core::player::DiscPlayer;
+use playdiaemu_core::video::{pack_rgb888, unpack_rgb888, CodecParams, VideoDecoder};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -147,7 +147,7 @@ fn pearson(a: &[f32], b: &[f32]) -> f32 {
 fn score_packet(pkt: &[u8], p: CodecParams, ref192: &[f32]) -> f32 {
     let mut dec = VideoDecoder::new();
     dec.params = p;
-    match playdia_core::video::decode_packet(pkt, p) {
+    match playdiaemu_core::video::decode_packet(pkt, p) {
         Some((rgb, _blocks)) => {
             // blit like VideoDecoder
             let (ox, oy) = ((320 - 192) / 2, (240 - 144) / 2);
@@ -171,9 +171,9 @@ fn collect_packets(disc: &Path, max_frames: u32) -> Result<Vec<Vec<u8>>> {
     // thin hook: re-read stream track F1-F2 groups.
     let mut player = DiscPlayer::new();
     player.load_path(disc)?;
-    // Disable decode for speed — we only need the stream. Monkey: use params
+    // Disable decode for speed 鈥?we only need the stream. Monkey: use params
     // that fail fast? Better: parse track directly.
-    let image = playdia_core::DiscImage::from_path(disc)?;
+    let image = playdiaemu_core::DiscImage::from_path(disc)?;
     let Some(track) = image.stream_track().cloned() else {
         anyhow::bail!("no stream track");
     };
@@ -300,7 +300,7 @@ fn main() -> Result<()> {
         let pkt = &packets[best.2];
         let mut dec = VideoDecoder::new();
         dec.params = best.1;
-        if let Some((rgb, _)) = playdia_core::video::decode_packet(pkt, best.1) {
+        if let Some((rgb, _)) = playdiaemu_core::video::decode_packet(pkt, best.1) {
             let (ox, oy) = ((320 - 192) / 2, (240 - 144) / 2);
             for y in 0..144 {
                 for x in 0..192 {

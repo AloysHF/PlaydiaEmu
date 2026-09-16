@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
+use playdiaemu_core::player::{DiscPlayer, PlayerStop};
+use playdiaemu_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 use rodio::buffer::SamplesBuffer;
 use rodio::{DeviceSinkBuilder, Player};
 use std::num::NonZero;

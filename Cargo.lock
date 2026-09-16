@@ -1272,26 +1272,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 
 [[package]]
-name = "playdia-core"
-version = "0.1.0"
-dependencies = [
- "cargo-husky",
- "crc32fast",
- "log",
- "thiserror 2.0.20",
- "zip",
-]
-
-[[package]]
-name = "playdia-tools"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "playdia-core",
-]
-
-[[package]]
 name = "playdiaemu"
 version = "0.1.0"
 dependencies = [
@@ -1302,8 +1282,19 @@ dependencies = [
  "image",
  "log",
  "minifb",
- "playdia-core",
+ "playdiaemu-core",
  "rodio",
+]
+
+[[package]]
+name = "playdiaemu-core"
+version = "0.1.0"
+dependencies = [
+ "cargo-husky",
+ "crc32fast",
+ "log",
+ "thiserror 2.0.20",
+ "zip",
 ]
 
 [[package]]
@@ -1311,7 +1302,16 @@ name = "playdiaemu-libretro"
 version = "0.1.0"
 dependencies = [
  "log",
- "playdia-core",
+ "playdiaemu-core",
+]
+
+[[package]]
+name = "playdiaemu-tools"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "playdiaemu-core",
 ]
 
 [[package]]

@@ -9,7 +9,7 @@ use std::os::raw::{c_char, c_int, c_uint};
 use std::ptr;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
+use playdiaemu_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
 
 use crate::callbacks;
 use crate::constants::*;
@@ -134,7 +134,7 @@ pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
         return false;
     }
 
-    let mut player = playdia_core::player::DiscPlayer::new();
+    let mut player = playdiaemu_core::player::DiscPlayer::new();
     if !info.path.is_null() {
         let path = unsafe {
             let mut len = 0usize;

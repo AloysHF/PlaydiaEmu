@@ -1,11 +1,11 @@
 //! Core tests: bus, content, state, SH-1 smoke, machine headless.
 
-use playdia_core::bus::{Bus, RAM_BASE};
-use playdia_core::content::{load_bios, DiscImage, LoadError, RAW_SECTOR};
-use playdia_core::diagnostics::Diagnostics;
-use playdia_core::machine::{Machine, MachineConfig, RunStop};
-use playdia_core::sh1::Sh1;
-use playdia_core::state::{crc32, decode_state, encode_state, ContentIdentity};
+use playdiaemu_core::bus::{Bus, RAM_BASE};
+use playdiaemu_core::content::{load_bios, DiscImage, LoadError, RAW_SECTOR};
+use playdiaemu_core::diagnostics::Diagnostics;
+use playdiaemu_core::machine::{Machine, MachineConfig, RunStop};
+use playdiaemu_core::sh1::Sh1;
+use playdiaemu_core::state::{crc32, decode_state, encode_state, ContentIdentity};
 use std::io::Write;
 
 #[test]
@@ -26,12 +26,12 @@ fn disc_size_rejects_odd() {
 fn disc_accepts_raw_and_cooked() {
     let raw = vec![0u8; RAW_SECTOR * 4];
     let d = DiscImage::from_bytes(raw).unwrap();
-    assert_eq!(d.kind, playdia_core::DiscKind::SingleRaw);
+    assert_eq!(d.kind, playdiaemu_core::DiscKind::SingleRaw);
     assert_eq!(d.total_sectors, 4);
 
     let cooked = vec![0u8; 2048 * 3];
     let d = DiscImage::from_bytes(cooked).unwrap();
-    assert_eq!(d.kind, playdia_core::DiscKind::SingleCooked);
+    assert_eq!(d.kind, playdiaemu_core::DiscKind::SingleCooked);
     assert_eq!(d.total_sectors, 3);
 }
 
@@ -68,7 +68,7 @@ fn disc_loads_multi_track_zip() {
     }
 
     let d = DiscImage::from_path(&zip_path).unwrap();
-    assert_eq!(d.kind, playdia_core::DiscKind::CueMultiTrack);
+    assert_eq!(d.kind, playdiaemu_core::DiscKind::CueMultiTrack);
     assert_eq!(d.tracks.len(), 2);
     assert_eq!(d.total_sectors, 5);
     assert!(d.stream_track().is_some());
@@ -96,7 +96,7 @@ fn disc_loads_single_image_zip() {
     }
 
     let d = DiscImage::from_path(&zip_path).unwrap();
-    assert_eq!(d.kind, playdia_core::DiscKind::SingleRaw);
+    assert_eq!(d.kind, playdiaemu_core::DiscKind::SingleRaw);
     assert_eq!(d.total_sectors, 2);
     assert_eq!(d.single.as_ref().unwrap().data, raw);
 }
@@ -159,7 +159,7 @@ fn sh1_executes_mov_and_add() {
 
 #[test]
 fn parse_mode2_form2_video_sector() {
-    use playdia_core::content::{parse_raw_sector, RAW_SECTOR};
+    use playdiaemu_core::content::{parse_raw_sector, RAW_SECTOR};
     let mut raw = vec![0u8; RAW_SECTOR];
     raw[15] = 2;
     raw[16] = 0x61;
@@ -249,7 +249,7 @@ fn save_state_on_machine() {
         enable_xa_stream: false,
         audio_test_tone: false,
     });
-    // identity needs to match — load same empty bios/disc defaults
+    // identity needs to match 鈥?load same empty bios/disc defaults
     m2.reset();
     // disc crc both 0, bios crc of zeros
     m2.load_state(&blob).unwrap();
@@ -264,7 +264,7 @@ fn save_state_on_machine() {
     let before = m2.save_state();
     assert!(matches!(
         m2.load_state(&old),
-        Err(playdia_core::state::SaveStateError::BadVersion(1))
+        Err(playdiaemu_core::state::SaveStateError::BadVersion(1))
     ));
     assert_eq!(m2.save_state(), before);
 }
@@ -277,9 +277,9 @@ fn crc32_stable() {
 
 #[test]
 fn xa_adpcm_silence_produces_samples() {
-    use playdia_core::audio::AudioDecoder;
-    use playdia_core::cd::XaPacket;
-    // 18*128 zeroed Form2 payload → silence, still expands to samples.
+    use playdiaemu_core::audio::AudioDecoder;
+    use playdiaemu_core::cd::XaPacket;
+    // 18*128 zeroed Form2 payload 鈫?silence, still expands to samples.
     let data = vec![0u8; 18 * 128];
     let mut ad = AudioDecoder::new();
     ad.ingest(&XaPacket::Audio {
@@ -296,8 +296,8 @@ fn xa_adpcm_silence_produces_samples() {
 
 #[test]
 fn video_f1_accumulates_and_frame_end_clears() {
-    use playdia_core::cd::XaPacket;
-    use playdia_core::video::VideoDecoder;
+    use playdiaemu_core::cd::XaPacket;
+    use playdiaemu_core::video::VideoDecoder;
     let mut v = VideoDecoder::new();
     let mut data = vec![0xF1u8];
     data.extend_from_slice(&[0u8; 32]);
@@ -315,6 +315,6 @@ fn video_f1_accumulates_and_frame_end_clears() {
         data: vec![0xF2],
     });
     assert_eq!(v.acc_sectors, 0);
-    // Packet does not start 00 80 04 → no successful decode
+    // Packet does not start 00 80 04 鈫?no successful decode
     assert_eq!(v.frames_decoded, 0);
 }

@@ -1,9 +1,9 @@
-use playdia_core::cd::{XaDemux, XaPacket};
-use playdia_core::content::parse_raw_sector;
-use playdia_core::video::structure::{
+use playdiaemu_core::cd::{XaDemux, XaPacket};
+use playdiaemu_core::content::parse_raw_sector;
+use playdiaemu_core::video::structure::{
     read_bits, scan_picture_rows, video_fragment, PictureHeader, VIDEO_PACKET_CAP,
 };
-use playdia_core::video::VideoDecoder;
+use playdiaemu_core::video::VideoDecoder;
 
 fn put(bits: &mut Vec<bool>, value: u32, count: usize) {
     for shift in (0..count).rev() {

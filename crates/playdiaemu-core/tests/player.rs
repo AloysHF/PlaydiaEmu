@@ -1,12 +1,12 @@
 //! HLE player tests against synthetic MODE2 discs (no copyrighted content).
 mod common;
 
-use playdia_core::content::{DiscImage, Track};
-use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::{DiscKind, InputButtons, FB_HEIGHT, FB_WIDTH};
+use playdiaemu_core::content::{DiscImage, Track};
+use playdiaemu_core::player::{DiscPlayer, PlayerStop};
+use playdiaemu_core::{DiscKind, InputButtons, FB_HEIGHT, FB_WIDTH};
 
 fn synthetic_stream_disc() -> Vec<u8> {
-    // 8 raw sectors: lead-in file0 + 6×F1 + F2
+    // 8 raw sectors: lead-in file0 + 6脳F1 + F2
     const S: usize = 2352;
     let mut raw = vec![0u8; S * 8];
     // lead-in
@@ -115,7 +115,7 @@ fn interactive_jump_uses_disc_lba_and_discards_prefetch() {
     assert_eq!(player.run_frame(), PlayerStop::Ok);
     assert_eq!(player.interactive[0].0, 11);
     assert_eq!(player.demux.interactive_cmds, 1);
-    // destinations[0] uses S=4 F=6 → LBA 180; track_index = 180 - base(10) = 170.
+    // destinations[0] uses S=4 F=6 鈫?LBA 180; track_index = 180 - base(10) = 170.
     assert_eq!(player.track_index, 170);
     assert_eq!(player.run_frame(), PlayerStop::Ok);
     assert_eq!(player.track_index, 178);

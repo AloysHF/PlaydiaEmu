@@ -30,7 +30,7 @@ are truncated in the last row; all remaining packets pass strict decoding.
 Inspect a title:
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-inspect -- "tmp/iso/<title>/<title>.cue"
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- "tmp/iso/<title>/<title>.cue"
 ```
 
 Play headlessly and dump a frame:

@@ -42,8 +42,8 @@ captures or chip logic. Clear game imagery is a separate milestone from
 hardware-identical RGB pixels.
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
 ```
 
 The frame tool exports 248×216 RGB888 pixels. Normal playback centers them in
@@ -147,7 +147,7 @@ claiming validated entropy boundaries.
 ## Reproduction and next decoding step
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-inspect -- path\to\game.cue --video-rows
+cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-rows
 ```
 
 The core and inspector share fragment slicing and padding recognition. Tests

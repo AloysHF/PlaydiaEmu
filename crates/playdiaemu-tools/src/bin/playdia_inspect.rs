@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use playdia_core::content::{DiscImage, Track};
-use playdia_core::video::parse_packet_header;
-use playdia_core::video::structure::{
+use playdiaemu_core::content::{DiscImage, Track};
+use playdiaemu_core::video::parse_packet_header;
+use playdiaemu_core::video::structure::{
     is_video_padding, scan_picture_rows, video_fragment, VIDEO_PACKET_CAP,
 };
 use std::collections::BTreeMap;

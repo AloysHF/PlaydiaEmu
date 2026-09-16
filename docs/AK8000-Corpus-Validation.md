@@ -22,8 +22,8 @@ The table was not changed during the complete 37-disc pass.
 Extract a local disc archive and run:
 
 ```powershell
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --check-all
-cargo run --release -p playdia-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
+cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
 ```
 
 Raw MODE2/2352 BIN tracks are also accepted. Packet indices are one-based and

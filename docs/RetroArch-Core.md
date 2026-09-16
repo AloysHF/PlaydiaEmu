@@ -101,7 +101,7 @@ A/Start, B, Right, Left, Up, Down.
 
 ## Building notes
 
-The core is a `cdylib` with no extra host dependencies beyond `playdia-core`:
+The core is a `cdylib` with no extra host dependencies beyond `playdiaemu-core`:
 
 ```powershell
 cargo build --release -p playdiaemu-libretro

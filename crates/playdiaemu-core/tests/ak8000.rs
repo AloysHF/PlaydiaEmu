@@ -1,10 +1,10 @@
 mod common;
 
 use common::{escape, picture, put};
-use playdia_core::cd::XaPacket;
-use playdia_core::video::ak8000::{decode, ErrorKind, HEIGHT, WIDTH};
-use playdia_core::video::VideoDecoder;
-use playdia_core::video::{decode_packet_frames, CodecParams};
+use playdiaemu_core::cd::XaPacket;
+use playdiaemu_core::video::ak8000::{decode, ErrorKind, HEIGHT, WIDTH};
+use playdiaemu_core::video::VideoDecoder;
+use playdiaemu_core::video::{decode_packet_frames, CodecParams};
 
 fn gray(rgb: &[u8], x: usize, y: usize) -> [u8; 3] {
     let offset = (y * WIDTH + x) * 3;
@@ -144,7 +144,7 @@ fn native_export_retains_eight_bit_channels() {
         }
         put(bits, 1, 2);
     });
-    let rgb = playdia_core::video::ak8000::decode_rgb888(&packet).unwrap();
+    let rgb = playdiaemu_core::video::ak8000::decode_rgb888(&packet).unwrap();
     assert_eq!(rgb.len(), WIDTH * HEIGHT * 3);
     assert!(rgb.iter().all(|&channel| channel == 131));
     assert_eq!(gray(&decode(&packet).unwrap(), 0, 0), [131; 3]);
@@ -188,7 +188,7 @@ fn playback_cache_and_ppm_preserve_export_colors() {
                 let pixel = video.framebuffer[y * 320 + x];
                 if (36..284).contains(&x) && (12..228).contains(&y) {
                     let i = ((y - 12) * WIDTH + x - 36) * 3;
-                    let (r, g, b) = playdia_core::video::unpack_rgb888(pixel);
+                    let (r, g, b) = playdiaemu_core::video::unpack_rgb888(pixel);
                     assert_eq!(&[r, g, b], &exported[i..i + 3]);
                 } else {
                     assert_eq!(pixel, 0);

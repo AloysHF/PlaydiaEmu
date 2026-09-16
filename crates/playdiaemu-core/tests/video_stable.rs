@@ -1,7 +1,7 @@
 //! Decode stability: identical packets must yield identical frames.
 
-use playdia_core::bitstream::BitReader;
-use playdia_core::video::{decode_packet_frames, parse_packet_header, CodecParams};
+use playdiaemu_core::bitstream::BitReader;
+use playdiaemu_core::video::{decode_packet_frames, parse_packet_header, CodecParams};
 
 #[test]
 fn bit_reader_honors_selected_byte_order() {

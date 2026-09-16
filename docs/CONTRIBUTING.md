@@ -15,7 +15,7 @@
 - Use `PascalCase` for types and structs
 - Prefer `anyhow::Result` for error handling
 - Use `log` crate for logging (not `println!`)
-- Keep `playdia-core` free of host I/O; frontends own files and windows
+- Keep `playdiaemu-core` free of host I/O; frontends own files and windows
 
 ## Areas That Need Help
 
@@ -29,7 +29,7 @@
 
 ## Getting Started
 
-Prefer synthetic fixtures under `crates/playdia-core/tests/` for regressions.
+Prefer synthetic fixtures under `crates/playdiaemu-core/tests/` for regressions.
 Do not commit BIOS dumps, disc images, or extracted copyrighted assets.
 
 To understand the Playdia disc format (CDS-XA, F1/F2/F3 markers, XA ADPCM),
