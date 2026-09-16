@@ -29,10 +29,9 @@ playdia-emu [OPTIONS] DISC
 ```
 
 There are no subcommands. With a disc path and no `--headless`, the windowed
-HLE player opens. `--headless` runs the HLE disc player without a window
-(aligned with `spmp8000-emu` / `dingoo-emu`). `-S/--screenshot` always runs
-headless for `--screenshot-frames` and exits. Disc inspection lives in
-`playdiaemu-tools` (`playdia-inspect`).
+HLE player opens. `--headless` runs the HLE disc player without a window.
+`-S/--screenshot` always runs headless for `--screenshot-frames` and exits.
+Disc inspection lives in `playdiaemu-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
@@ -158,9 +157,8 @@ preserve exactly the same channel precision, with a centered black border.
 
 ## Batch screenshots
 
-`scripts/batch-screenshots.ps1` captures a PNG for every disc under a folder
-(same pattern as `spmp8000-emu` / `dingoo-emu`). Output goes to
-`docs/images/`. Redump-style ZIPs are loaded in place:
+`scripts/batch-screenshots.ps1` captures a PNG for every disc under a folder.
+Output goes to `docs/images/`. Redump-style ZIPs are loaded in place:
 
 ```powershell
 # Rebuild release binary, then capture every .zip under -RedumpDir

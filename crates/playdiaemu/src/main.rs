@@ -88,7 +88,7 @@ fn main() -> Result<()> {
         bail!("provide a disc path (optional --headless)");
     };
 
-    // Screenshot runs headless for --screenshot-frames, matching spmp8000-emu / dingoo-emu.
+    // Screenshot always runs headless for --screenshot-frames, then exits.
     if cli.screenshot.is_some() || cli.headless {
         let (frames, screenshot) = match cli.screenshot.as_deref() {
             Some(path) => (cli.screenshot_frames, Some(path)),
