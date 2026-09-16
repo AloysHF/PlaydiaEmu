@@ -37,23 +37,38 @@ core metadata.
 
 1. Open RetroArch and select **Load Core > Playdia (PlaydiaEmu)**.
 2. Select **Load Content**.
-3. Choose a `.cue`, `.iso`, or `.bin` disc image.
+3. Choose a `.cue` (preferred), Redump-style `.zip`, `.iso`, or raw `.bin` disc image.
 
-> The core advertises `cue|iso|bin` and requires the full content path
-> (`need_fullpath`). Dual-track CUE/BIN support via the libretro front is
-> limited compared with the standalone HLE `--headless` path — prefer the standalone
-> HLE player for real Redump CUE/BIN titles.
+> The core advertises `cue|zip|iso|bin` and requires the full content path
+> (`need_fullpath`, `block_extract`). Content loading uses the same HLE
+> `DiscPlayer` path as the standalone emulator: dual-track MODE2 CUE/BIN
+> (also when the CUE/BIN pair is inside a ZIP), F1/F2/F3 routing, XA audio.
+> No BIOS is required. ZIP paths are passed to the core so the frontend does
+> not extract archives.
 
 ## Supported Features
 
+- HLE disc player (`DiscPlayer`) aligned with the standalone emulator
 - Video output using XRGB8888 (320×240, eight bits per channel, 1,280-byte row pitch)
 - Stereo audio output at 44100 Hz
-- RetroPad input handling
-- Save states via libretro serialize / unserialize (version 2; version 1 states are rejected)
-- LLE machine path (`Machine`) rather than the standalone HLE `DiscPlayer`
+- RetroPad input handling (including interactive F2 choice mapping)
+- Input descriptors for the frontend key-remap UI
+- Performance level 4 (same as SPMP8000/Dingoo HLE shells)
+- Rust `log` messages forwarded to the RetroArch log interface
+- Host pacing at 30 fps (matches standalone HLE video slot rate)
+- Save states via libretro serialize / unserialize (version 2 envelope; disc CRC must match)
 
-The frontend must accept `RETRO_PIXEL_FORMAT_XRGB8888`; loading fails if it
-rejects the format. No RGB555 fallback reduces the decoded channel precision.
+## Core Options
+
+| Option key | Values | Default |
+|---|---|---|
+| `playdiaemu_volume` | 100…0% | 100% |
+| `playdiaemu_swap_ab` | disabled / enabled | disabled |
+| `playdiaemu_debug_logging` | disabled / enabled | disabled |
+
+Volume scales host PCM before submit. Swap A/B exchanges RetroPad A and B.
+Debug logging raises the `log` crate level to Debug so more records reach
+the RetroArch log.
 
 ## RetroPad Button Mapping
 
@@ -66,29 +81,23 @@ rejects the format. No RGB555 fallback reduces the decoded channel precision.
 | Select | Select |
 | X / Y | Unused |
 
+At interactive F2 choice screens the same mapping selects destinations:
+A/Start, B, Right, Left, Up, Down.
+
 ## Timing
 
 | Field | Value |
 |-------|-------|
 | Base resolution | 320×240 |
 | Aspect ratio | 4:3 |
-| Frame rate | 60 fps (core AV info) |
+| Frame rate | 30 fps (HLE host frames; matches standalone) |
 | Sample rate | 44100 Hz |
-
-> Standalone HLE playback targets ~30 host frames/sec for disc video. The
-> libretro AV info currently reports 60 fps while driving the LLE machine;
-> treat this as a shell until content loading is fully aligned with the HLE
-> player.
 
 ## Limitations
 
-- No core options UI yet
 - Cheats are stubbed (`retro_cheat_*` no-ops)
+- No memory maps (HLE player has no fixed guest address space)
 - No Android / iOS / webOS packaging docs yet
-- Content loading is not yet the same dual-track HLE path as the standalone `--headless` player
-- BIOS is still required for retail LLE boot
-- The shared core includes native AK8000 picture decoding; this does not remove
-  the libretro content-loading and LLE boot limitations above
 
 ## Building notes
 

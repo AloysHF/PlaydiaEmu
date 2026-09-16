@@ -14,3 +14,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 playdia-core = { path = "../playdia-core" }
+log = { workspace = true }

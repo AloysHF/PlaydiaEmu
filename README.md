@@ -36,6 +36,8 @@ Research-grade but usable for disc playback:
 
 ```powershell
 cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
+# Redump-style ZIP works too (CUE+BIN inside; no extract needed)
+cargo run --release -p playdiaemu -- path\to\game.zip --headless --frames 180
 ```
 
 For a reproducible button choice in headless playback, add for example
@@ -45,6 +47,7 @@ Windowed playback:
 
 ```powershell
 cargo run --release -p playdiaemu -- path\to\game.cue
+cargo run --release -p playdiaemu -- path\to\game.zip
 ```
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
@@ -60,8 +63,10 @@ Build the libretro core and load a disc image through RetroArch's
 cargo build --release -p playdiaemu-libretro
 ```
 
-See the [RetroArch Core](docs/RetroArch-Core.md) guide for installation,
-RetroPad mapping, supported features, and current limitations.
+The libretro core uses the same HLE disc player as the standalone emulator
+(dual-track MODE2 CUE/BIN, F1/F2/F3, XA audio; no BIOS). See the
+[RetroArch Core](docs/RetroArch-Core.md) guide for installation, RetroPad
+mapping, supported features, and current limitations.
 
 ## Building
 

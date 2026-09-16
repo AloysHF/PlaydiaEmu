@@ -22,7 +22,7 @@ use keyboard::{KeyboardMapper, RemapSpec};
     version
 )]
 struct Cli {
-    /// Path to .cue (preferred) or raw .bin/.iso
+    /// Path to .cue / .zip (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
     /// Window scale factor (native is 320x240)
     #[arg(

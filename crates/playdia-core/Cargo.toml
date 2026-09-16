@@ -9,6 +9,7 @@ description = "Headless deterministic Playdia core"
 thiserror = { workspace = true }
 crc32fast = { workspace = true }
 log = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
 cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-fmt", "run-cargo-clippy"] }
