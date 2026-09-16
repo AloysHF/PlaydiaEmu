@@ -168,31 +168,44 @@ decode or visual check; debug builds are for unit tests and fast iteration only.
 crates/
 ├── playdiaemu-core/            # Platform-independent emulator engine (library)
 │   └── src/
-│       ├── lib.rs           # Crate root
-│       ├── machine.rs       # LLE machine (SH-1 + bus + CDXA device)
-│       ├── player.rs        # HLE DiscPlayer (Track 2 stream)
-│       ├── sh1.rs           # SH-1 interpreter subset
-│       ├── bus.rs           # Address space + diagnostics
-│       ├── cd.rs            # Disc image / CUE/BIN loading
-│       ├── cdx.rs           # CDS-XA demux and routing
-│       ├── audio.rs         # XA ADPCM decode + resample
-│       ├── video.rs         # F1 packet / DCT path
-│       ├── bitstream.rs     # Bit reader
-│       ├── ac_tables.rs     # Coefficient / VLC tables
-│       ├── input.rs         # Button state
-│       ├── state.rs         # Save-state envelope
-│       ├── content.rs       # Content identity
-│       └── diagnostics.rs   # Unmapped / unknown / budget counters
-├── playdiaemu/              # Standalone binary (→ playdia-emu)
+│       ├── lib.rs              # Crate root
+│       ├── machine.rs          # LLE machine (SH-1 + bus + CDXA device)
+│       ├── player.rs           # HLE DiscPlayer (Track 2 stream)
+│       ├── sh1.rs              # SH-1 interpreter subset
+│       ├── bus.rs              # Address space + diagnostics
+│       ├── cd.rs               # Disc image / CUE/BIN helpers
+│       ├── cdx.rs              # LLE CDXA device (shared MMIO window)
+│       ├── content.rs          # Disc load (CUE/BIN, ZIP, raw/cooked) + demux types
+│       ├── audio.rs            # XA ADPCM decode + resample
+│       ├── video.rs            # F1 packet assembly / presentation path
+│       ├── video/
+│       │   ├── ak8000.rs       # Native AK8000 entropy / pixel decode
+│       │   └── structure.rs    # Picture header, row markers, F1/F2 fragments
+│       ├── bitstream.rs        # Bit reader
+│       ├── ac_tables.rs        # Coefficient / VLC tables
+│       ├── input.rs            # Button state
+│       ├── state.rs            # Save-state envelope
+│       └── diagnostics.rs      # Unmapped / unknown / budget counters
+├── playdiaemu/                 # Standalone binary (→ playdia-emu)
 │   └── src/
-│       └── main.rs          # Window + CLI (window / --headless)
+│       ├── main.rs             # Window + CLI (window / --headless)
+│       ├── keyboard.rs         # Default keys + --remap
+│       ├── gamepad.rs          # Physical gamepad (gilrs)
+│       └── gamepad_overlay.rs  # On-screen button overlay
 ├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
 │   ├── playdiaemu_libretro.info
-│   └── src/lib.rs           # libretro C ABI
-└── playdiaemu-tools/           # ISO/XA inspector and research utilities
+│   └── src/
+│       ├── lib.rs              # C ABI entry + core state
+│       ├── api.rs              # retro_* implementation
+│       ├── callbacks.rs        # Frontend callback storage
+│       ├── constants.rs        # Timing, device IDs, performance level
+│       ├── logger.rs           # log → RetroArch log bridge
+│       └── types.rs            # libretro C types
+└── playdiaemu-tools/           # Inspector and research utilities
     └── src/bin/
-        ├── playdia_inspect.rs
-        └── playdia_scan.rs
+        ├── playdia_inspect.rs  # Sector / F1–F3 / audio counts
+        ├── playdia_scan.rs     # Research scan helper
+        └── playdia_frame.rs    # Decode one packet or --check-all
 ```
 
 ### Core contract
