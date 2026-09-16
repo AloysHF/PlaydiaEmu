@@ -54,10 +54,10 @@ Payload[0]:
 
 Interactive F2 sectors (`submode` bit 0 set) contain a command byte followed by
 seven four-byte button destinations. Each destination stores binary minute,
-second, frame, and an extra byte; the absolute disc LBA is
-`minute × 4500 + second × 75 + frame − 150`. The HLE player follows known
-scene jumps and button choices within the stream track. Other command effects
-remain under investigation.
+second, a five-sector unit (not a CD MSF frame), and an extra byte; the absolute
+disc LBA is `minute × 4500 + second × 75 + unit × 5 − 150`. The HLE player
+follows known scene jumps and button choices within the stream track. Other
+command effects remain under investigation.
 Interactive F2 sectors also carry video tails. The HLE player finishes and
 presents the latest queued preview before handling the control command, so
 waiting for input does not freeze on an earlier queued picture.
