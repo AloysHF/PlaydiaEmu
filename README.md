@@ -52,7 +52,9 @@ cargo run --release -p playdiaemu -- path\to\game.zip
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
 installation, keyboard controls, headless mode, screenshots/PPM dumps, and all
-command-line options.
+command-line options. Batch title-screen captures live in
+`scripts/batch-screenshots.ps1`; the published matrix is
+[Game Compatibility](docs/Game-Compatibility.md).
 
 ### RetroArch Mode
 

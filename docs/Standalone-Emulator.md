@@ -156,6 +156,26 @@ are supported. `--assembled` accepts an already assembled packet for isolated
 debugging. PPM output is 248×216 RGB888. The player and its 320×240 PPM screenshots
 preserve exactly the same channel precision, with a centered black border.
 
+## Batch screenshots
+
+`scripts/batch-screenshots.ps1` captures a PNG for every disc under a folder
+(same pattern as `spmp8000-emu` / `dingoo-emu`). Output goes to
+`docs/images/`. Redump-style ZIPs are loaded in place:
+
+```powershell
+# Rebuild release binary, then capture every .zip under -RedumpDir
+.\scripts\batch-screenshots.ps1 -RedumpDir <local-redump-folder>
+
+# Existing binary, extracted CUE/BIN tree under tmp\playdia_game
+.\scripts\batch-screenshots.ps1 -SkipBuild -GameDir tmp\playdia_game
+```
+
+Optional: `-Frames` (default 300, with a few title-screen overrides that may
+also inject `--press-at` to leave the BANDAI boot logo), `-TimeoutSeconds`
+(default 300), `-Binary`, `-SkipBuild`. Do not commit disc images; only the
+PNG previews and the script belong in the repository. See
+[Game Compatibility](Game-Compatibility.md) for the published matrix.
+
 ## Audio Output
 
 XA ADPCM is decoded and resampled to 44100 Hz stereo. The window frontend
