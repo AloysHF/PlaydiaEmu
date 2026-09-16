@@ -28,6 +28,6 @@ hw_render = "false"
 needs_fullpath = "true"
 block_extract = "true"
 disk_control = "false"
-is_experimental = "true"
+is_experimental = "false"
 
 description = "PlaydiaEmu is an emulator for the Bandai Playdia interactive CD console. This libretro core is the HLE disc player (same path as the standalone emulator): dual-track MODE2 CUE/BIN (including Redump-style ZIP), F1/F2/F3 routing, XA audio, no BIOS required."
