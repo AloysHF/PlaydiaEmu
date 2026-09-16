@@ -52,6 +52,9 @@ core metadata.
 - Video output using XRGB8888 (320×240, eight bits per channel, 1,280-byte row pitch)
 - Stereo audio output at 44100 Hz
 - RetroPad input handling (including interactive F2 choice mapping)
+- Input descriptors for the frontend key-remap UI
+- Performance level 4 (same as SPMP8000/Dingoo HLE shells)
+- Rust `log` messages forwarded to the RetroArch log interface
 - Host pacing at 30 fps (matches standalone HLE video slot rate)
 - Save states via libretro serialize / unserialize (version 2 envelope; disc CRC must match)
 

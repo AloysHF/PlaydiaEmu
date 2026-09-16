@@ -9,11 +9,13 @@
 #![allow(clippy::chunks_exact_to_as_chunks)]
 #![allow(clippy::if_same_then_else)]
 
+use log::{Level, LevelFilter, Log, Metadata, Record};
 use playdia_core::player::DiscPlayer;
 use playdia_core::{InputButtons, FB_HEIGHT, FB_WIDTH};
-use std::ffi::c_void;
+use std::ffi::{c_void, CStr, CString};
 use std::os::raw::{c_char, c_int, c_uint};
 use std::ptr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 const RETRO_API_VERSION: c_int = 1;
@@ -28,12 +30,23 @@ const RETRO_DEVICE_ID_JOYPAD_LEFT: c_uint = 6;
 const RETRO_DEVICE_ID_JOYPAD_RIGHT: c_uint = 7;
 const RETRO_DEVICE_ID_JOYPAD_A: c_uint = 8;
 const RETRO_DEVICE_ID_JOYPAD_X: c_uint = 9;
+const RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: c_uint = 8;
 const RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: c_uint = 10;
+const RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: c_uint = 11;
+const RETRO_ENVIRONMENT_GET_LOG_INTERFACE: c_uint = 27;
 const RETRO_PIXEL_FORMAT_XRGB8888: c_int = 1;
 const RETRO_REGION_NTSC: c_uint = 0;
+const RETRO_LOG_DEBUG: c_int = 0;
+const RETRO_LOG_INFO: c_int = 1;
+const RETRO_LOG_WARN: c_int = 2;
+const RETRO_LOG_ERROR: c_int = 3;
 
 /// Standalone HLE paces ~30 host frames/sec for disc video.
 const HOST_FPS: f64 = 30.0;
+/// Match SPMP8000/Dingoo HLE shells.
+const PERFORMANCE_LEVEL: c_uint = 4;
+
+type LogFn = unsafe extern "C" fn(level: c_int, fmt: *const c_char);
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -78,6 +91,22 @@ pub struct RetroSystemAvInfo {
     timing: SystemTiming,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct RetroInputDescriptor {
+    port: c_uint,
+    device: c_uint,
+    index: c_uint,
+    id: c_uint,
+    description: *const c_char,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct RetroLogCallback {
+    log: LogFn,
+}
+
 type EnvironmentFn = extern "C" fn(cmd: c_uint, data: *mut c_void) -> bool;
 type VideoRefreshFn =
     extern "C" fn(data: *const c_void, width: c_uint, height: c_uint, pitch: usize);
@@ -93,6 +122,7 @@ struct Callbacks {
     audio_sample_batch: Option<AudioSampleBatchFn>,
     input_poll: Option<InputPollFn>,
     input_state: Option<InputStateFn>,
+    log: Option<LogFn>,
 }
 
 static mut CALLBACKS: Callbacks = Callbacks {
@@ -102,12 +132,112 @@ static mut CALLBACKS: Callbacks = Callbacks {
     audio_sample_batch: None,
     input_poll: None,
     input_state: None,
+    log: None,
 };
 
 static CORE: Mutex<Option<DiscPlayer>> = Mutex::new(None);
+static LOGGER: LibretroLogger = LibretroLogger;
+static DEBUG_LOGGING: AtomicBool = AtomicBool::new(false);
+
+struct LibretroLogger;
+
+impl Log for LibretroLogger {
+    fn enabled(&self, metadata: &Metadata) -> bool {
+        metadata.level() <= Level::Info || DEBUG_LOGGING.load(Ordering::Relaxed)
+    }
+
+    fn log(&self, record: &Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let level = match record.level() {
+            Level::Error => RETRO_LOG_ERROR,
+            Level::Warn => RETRO_LOG_WARN,
+            Level::Info => RETRO_LOG_INFO,
+            Level::Debug | Level::Trace => RETRO_LOG_DEBUG,
+        };
+        // Frontend log is printf-style; escape `%` and pass the full line as fmt.
+        let text = format!("[PlaydiaEmu] {}\n", record.args()).replace('%', "%%");
+        let Ok(message) = CString::new(text) else {
+            return;
+        };
+        if let Some(log_fn) = unsafe { CALLBACKS.log } {
+            unsafe { log_fn(level, message.as_ptr()) };
+        }
+    }
+
+    fn flush(&self) {}
+}
 
 fn cstr(bytes: &[u8]) -> *const c_char {
     bytes.as_ptr() as *const c_char
+}
+
+fn environment(cmd: c_uint, data: *mut c_void) -> bool {
+    unsafe {
+        match CALLBACKS.environment {
+            Some(env) => env(cmd, data),
+            None => false,
+        }
+    }
+}
+
+fn init_log() {
+    unsafe extern "C" fn unused_log(_level: c_int, _fmt: *const c_char) {}
+    let mut log_cb = RetroLogCallback { log: unused_log };
+    if environment(
+        RETRO_ENVIRONMENT_GET_LOG_INTERFACE,
+        &mut log_cb as *mut _ as *mut c_void,
+    ) {
+        unsafe { CALLBACKS.log = Some(log_cb.log) };
+    } else {
+        unsafe { CALLBACKS.log = Some(unused_log) };
+    }
+    let _ = log::set_logger(&LOGGER);
+    log::set_max_level(LevelFilter::Info);
+}
+
+fn set_performance_level() {
+    let mut level = PERFORMANCE_LEVEL;
+    environment(
+        RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL,
+        &mut level as *mut c_uint as *mut c_void,
+    );
+}
+
+fn input_descriptors() -> [RetroInputDescriptor; 9] {
+    let descriptor = |id: c_uint, description: &'static CStr| RetroInputDescriptor {
+        port: 0,
+        device: RETRO_DEVICE_JOYPAD,
+        index: 0,
+        id,
+        description: description.as_ptr(),
+    };
+    [
+        descriptor(RETRO_DEVICE_ID_JOYPAD_UP, c"D-Pad Up"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_DOWN, c"D-Pad Down"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_LEFT, c"D-Pad Left"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_RIGHT, c"D-Pad Right"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_A, c"A"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_B, c"B"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_START, c"Start"),
+        descriptor(RETRO_DEVICE_ID_JOYPAD_SELECT, c"Select"),
+        RetroInputDescriptor {
+            port: 0,
+            device: 0,
+            index: 0,
+            id: 0,
+            description: ptr::null(),
+        },
+    ]
+}
+
+fn register_input_descriptors() {
+    let descriptors = input_descriptors();
+    environment(
+        RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS,
+        descriptors.as_ptr() as *mut c_void,
+    );
 }
 
 #[no_mangle]
@@ -185,11 +315,15 @@ pub extern "C" fn retro_get_system_av_info(info: *mut RetroSystemAvInfo) {
 }
 
 #[no_mangle]
-pub extern "C" fn retro_init() {}
+pub extern "C" fn retro_init() {
+    init_log();
+    log::info!("PlaydiaEmu libretro core initialized");
+}
 
 #[no_mangle]
 pub extern "C" fn retro_deinit() {
     *CORE.lock().unwrap() = None;
+    log::info!("PlaydiaEmu libretro core deinitialized");
 }
 
 #[no_mangle]
@@ -347,7 +481,10 @@ pub extern "C" fn retro_load_game(game: *const GameInfo) -> bool {
     ) {
         return false;
     }
+    register_input_descriptors();
+    set_performance_level();
     *CORE.lock().unwrap() = Some(p);
+    log::info!("Loaded HLE disc player content");
     true
 }
 
@@ -390,13 +527,39 @@ mod tests {
     static ACCEPT_FORMAT: AtomicBool = AtomicBool::new(false);
     static VIDEO_SEEN: AtomicBool = AtomicBool::new(false);
     static VIDEO_DIMS_OK: AtomicBool = AtomicBool::new(false);
+    static INPUT_DESCRIPTORS_SET: AtomicBool = AtomicBool::new(false);
+    static PERFORMANCE_LEVEL_SET: AtomicBool = AtomicBool::new(false);
+    static LOG_INTERFACE_SET: AtomicBool = AtomicBool::new(false);
+
+    unsafe extern "C" fn test_log(_level: c_int, _fmt: *const c_char) {}
 
     extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
-        if cmd == RETRO_ENVIRONMENT_SET_PIXEL_FORMAT {
-            let format = unsafe { *(data as *const c_int) };
-            return format == 1 && ACCEPT_FORMAT.load(Ordering::SeqCst);
+        match cmd {
+            RETRO_ENVIRONMENT_SET_PIXEL_FORMAT => {
+                let format = unsafe { *(data as *const c_int) };
+                format == 1 && ACCEPT_FORMAT.load(Ordering::SeqCst)
+            }
+            RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS => {
+                let first = unsafe { *(data as *const RetroInputDescriptor) };
+                INPUT_DESCRIPTORS_SET.store(
+                    !first.description.is_null() && first.device == RETRO_DEVICE_JOYPAD,
+                    Ordering::SeqCst,
+                );
+                true
+            }
+            RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL => {
+                let level = unsafe { *(data as *const c_uint) };
+                PERFORMANCE_LEVEL_SET.store(level == PERFORMANCE_LEVEL, Ordering::SeqCst);
+                true
+            }
+            RETRO_ENVIRONMENT_GET_LOG_INTERFACE => {
+                let cb = data as *mut RetroLogCallback;
+                unsafe { (*cb).log = test_log };
+                LOG_INTERFACE_SET.store(true, Ordering::SeqCst);
+                true
+            }
+            _ => true,
         }
-        true
     }
 
     extern "C" fn video(data: *const c_void, width: c_uint, height: c_uint, pitch: usize) {
@@ -441,6 +604,12 @@ mod tests {
         ACCEPT_FORMAT.store(true, Ordering::SeqCst);
         VIDEO_SEEN.store(false, Ordering::SeqCst);
         VIDEO_DIMS_OK.store(false, Ordering::SeqCst);
+        INPUT_DESCRIPTORS_SET.store(false, Ordering::SeqCst);
+        PERFORMANCE_LEVEL_SET.store(false, Ordering::SeqCst);
+        LOG_INTERFACE_SET.store(false, Ordering::SeqCst);
+
+        retro_init();
+        assert!(LOG_INTERFACE_SET.load(Ordering::SeqCst));
 
         assert!(!retro_load_game(ptr::null()));
         assert!(CORE.lock().unwrap().is_none());
@@ -449,6 +618,8 @@ mod tests {
         let info = game_info_for_bytes(&disc);
         assert!(retro_load_game(&info));
         assert!(CORE.lock().unwrap().is_some());
+        assert!(INPUT_DESCRIPTORS_SET.load(Ordering::SeqCst));
+        assert!(PERFORMANCE_LEVEL_SET.load(Ordering::SeqCst));
 
         retro_run();
         assert!(VIDEO_SEEN.load(Ordering::SeqCst));
@@ -466,5 +637,6 @@ mod tests {
         retro_reset();
         retro_unload_game();
         assert!(CORE.lock().unwrap().is_none());
+        retro_deinit();
     }
 }
