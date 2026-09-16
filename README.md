@@ -208,16 +208,22 @@ crates/
         └── playdia_frame.rs    # Decode one packet or --check-all
 ```
 
-### Core contract
+### Core contract (`DiscPlayer`)
 
-- `load_disc_*` / optional `load_bios_*`
+The recommended player path is `playdiaemu_core::player::DiscPlayer` (same API
+as the standalone binary and libretro core). No BIOS is required.
+
+- `load_path` / `load_bytes` — `.cue` (+ bin), Redump-style `.zip`, or raw/cooked image
 - `reset`, `run_frame`, `set_input`
 - `framebuffer` → 320×240 XRGB8888 (`u32`, `0x00RRGGBB`)
 - `drain_audio` → interleaved stereo i16 @ 44100
 - `save_state` / `load_state` with content identity + CRC
-- diagnostics for unmapped access and unknown opcodes
 
-For the proven memory map, CDS-XA routing, and codec notes, see
+The library also contains an experimental LLE shell (`Machine` +
+`load_disc_*` / optional `load_bios_*`) for firmware research. Retail LLE boot
+needs a user-supplied 512 KiB BIOS; the libretro core does not use this path.
+
+For CDS-XA routing, video markers, codec notes, and the LLE memory map, see
 [Game File Formats](docs/Game-File-Formats.md).
 
 ## Key Mappings (Standalone window)
