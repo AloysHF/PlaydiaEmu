@@ -75,80 +75,33 @@ command-line options. Batch title-screen captures live in
 ### RetroArch Mode
 
 Build the libretro core and load a disc image through RetroArch's
-**Load Content** menu:
-
-```powershell
-cargo build --release -p playdiaemu-libretro
-```
-
-The libretro core uses the same HLE disc player as the standalone emulator
-(dual-track MODE2 CUE/BIN, F1/F2/F3, XA audio; no BIOS). See the
-[RetroArch Core](docs/RetroArch-Core.md) guide for installation, RetroPad
-mapping, supported features, and current limitations.
+**Load Content** menu. The core uses the same HLE disc player as the
+standalone emulator (no BIOS). See [RetroArch Core](docs/RetroArch-Core.md)
+for build, install (cdylib rename + `.info`), RetroPad mapping, features,
+and limitations.
 
 ## Building
 
 Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
 
-### Standalone Mode
-
-```powershell
-cargo build --release -p playdiaemu
-cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
-```
-
-### Window frontend
-
-```powershell
-cargo build --release -p playdiaemu
-```
-
-The binary is produced at `target\release\playdia-emu.exe` (`.exe` on Windows).
-
-### Libretro Core (for RetroArch)
-
-```powershell
-cargo build --release -p playdiaemu-libretro
-```
-
-Cargo names the cdylib after its lib target, so this produces
-`playdiaemu.dll` on Windows (`libplaydiaemu.so` on Linux,
-`libplaydiaemu.dylib` on macOS) under `target/release/`. Rename it to
-`playdiaemu_libretro.<ext>` before placing it in RetroArch's `cores/`
-directory. Copy `playdiaemu_libretro.info` into RetroArch's `info/`
-directory.
+| Target | Command | Details |
+|--------|---------|---------|
+| Standalone (`playdia-emu`) | `cargo build --release -p playdiaemu` | Binary: `target/release/playdia-emu` (`.exe` on Windows). Full CLI, keys, headless: [Standalone Emulator](docs/Standalone-Emulator.md) |
+| Libretro core | `cargo build --release -p playdiaemu-libretro` | Rename cdylib → `playdiaemu_libretro.<ext>` and install `.info`: [RetroArch Core](docs/RetroArch-Core.md) |
 
 ### Tools
 
 ```powershell
 cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue
-```
-
-For video packet header frequencies, run
-`cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-headers`.
-Add `--video-candidates` to rank packets by low body-byte entropy and long
-`0x55`/`0xAA` runs. The reported track-relative LBAs help target codec research;
-these patterns do not establish decoded pixels or a VLC table.
-Use `--video-rows` to count MSB-first 27-row sequences, ambiguous marker matches,
-and picture terminators in F2 tails. Packet assembly preserves pending video
-across FF-filled F3 sectors. See [AK8000 research](docs/AK8000-Research.md) for
-evidence, the recovered decoder and remaining pixel-accuracy questions.
-`python tools/probe_sparse_vlc.py path\to\track.bin` checks a conservative partial
-codeword grammar on short rows; it also accepts a ZIP containing Track 2.
-Its counts are research diagnostics, not decoded coefficients or game pixels.
-
-Decode a specific picture without navigating the game, or validate a whole disc:
-
-```powershell
 cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
 ```
 
-Packet numbers start at 1 and include interactive F2 packets. The frame tool
-exports 248×216 RGB888 PPMs; the player exports the same RGB888 colors
-centered in 320×240. Neither path reduces channels to five bits. A [37-disc validation run](docs/AK8000-Corpus-Validation.md) passed
-1,135,531 of 1,135,539 picture packets; eight packets end inside their final row.
-This measures entropy coverage, not full game compatibility or hardware pixel accuracy.
+Inspector flags (`--video-headers`, `--video-rows`, `--video-candidates`),
+`playdia-frame --check-all`, and research notes: see
+[Standalone Emulator](docs/Standalone-Emulator.md) and
+[AK8000 research](docs/AK8000-Research.md). A [37-disc validation run](docs/AK8000-Corpus-Validation.md)
+measures entropy coverage only — not full game compatibility or hardware
+pixel accuracy.
 
 ## Testing
 
