@@ -6,11 +6,12 @@ members = [
     "crates/playdiaemu-tools",
     "crates/playdiaemu-libretro",
 ]
+default-members = ["crates/playdiaemu-libretro"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT OR Apache-2.0"
+license = "BSD-3-Clause"
 repository = "https://example.invalid/playdiaemu"
 authors = ["PlaydiaEmu contributors"]
 

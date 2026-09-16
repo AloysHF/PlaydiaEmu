@@ -4,7 +4,7 @@ authors = "Aloys"
 supported_extensions = "cue|zip|iso|bin"
 corename = "playdiaemu"
 categories = "Emulator"
-license = "MIT"
+license = "BSD-3-Clause"
 permissions = ""
 display_version = "0.1.0"
 

@@ -1,5 +1,21 @@
 # PlaydiaEmu — A Bandai Playdia emulator written in Rust
 
+<p align="center">
+  <img src="res/logo-banner.png" alt="PlaydiaEmu" width="600">
+</p>
+
+<p align="center">
+  <a href="https://aloysHF.github.io/PlaydiaEmu/"><img src="https://img.shields.io/badge/Website-PlaydiaEmu-E8553A?logo=githubpages&logoColor=white" alt="Website"></a>
+  <a href="https://github.com/AloysHF/PlaydiaEmu/actions/workflows/ci.yml"><img src="https://github.com/AloysHF/PlaydiaEmu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://git.libretro.com/libretro/playdiaemu/-/pipelines"><img src="https://img.shields.io/gitlab/pipeline-status/playdiaemu?gitlab_url=https%3A%2F%2Fgit.libretro.com%2Flibretro&branch=master&logo=gitlab&label=Pipeline%20Status" alt="Gitlab Pipeline Status" ></a>
+  <a href="https://github.com/AloysHF/PlaydiaEmu/releases/latest"><img src="https://img.shields.io/github/v/release/AloysHF/PlaydiaEmu" alt="Release"></a>
+  <a href="https://github.com/AloysHF/PlaydiaEmu/releases"><img src="https://img.shields.io/github/downloads/AloysHF/PlaydiaEmu/total" alt="Downloads"></a>
+  <a href="https://sonarcloud.io/dashboard?id=AloysHF_PlaydiaEmu"><img src="https://sonarcloud.io/api/project_badges/measure?project=AloysHF_PlaydiaEmu&metric=alert_status" alt="Quality Gate Status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License: BSD 3-Clause"></a>
+  <a href="https://discord.gg/7XDdSrYD"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://qm.qq.com/q/LAO7DKAWUC"><img src="https://img.shields.io/badge/QQ%E7%BE%A4-Join%20Us-12B7F5?logo=tencent-qq&logoColor=white" alt="QQ Group"></a>
+</p>
+
 Playdia is a 1990s Japanese interactive CD console from Bandai. Titles are
 largely full-motion video driven by a CD-XA disc stream, with audio and video
 decoded on a co-processor board. PlaydiaEmu is a Rust workspace that plays
@@ -232,13 +248,6 @@ Contributions are welcome — compatibility testing, codec research, SH-1
 accuracy, docs, and bug reports. See [CONTRIBUTING.md](docs/CONTRIBUTING.md)
 for details, code style, and the local CI checks.
 
-## Legal
-
-Do not commit BIOS dumps, disc images, or extracted copyrighted assets.
-`tmp/` is for private research materials only. Retail LLE boot requires a
-user-supplied 512 KiB BIOS; the emulator refuses silent zero-fill outside
-explicit test mode.
-
 ## License
 
-This project is licensed under the [MIT OR Apache-2.0](Cargo.toml) dual license.
+This project is licensed under the [BSD 3-Clause License](LICENSE).

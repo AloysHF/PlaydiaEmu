@@ -1,8 +1,5 @@
 # Game Compatibility
 
-HLE player (no BIOS). Status is based on private Redump samples; do not commit
-discs, BIOS images, or PPM dumps.
-
 ## Summary
 
 | Status | Count |
@@ -10,7 +7,6 @@ discs, BIOS images, or PPM dumps.
 | ✅ Batch screenshot (non-blank frame rendered) | 37 |
 | HLE player integration checks (load + stream + video + audio) | 2 |
 | Native entropy validation across complete disc streams | 37 |
-| Hardware pixel comparison or complete playthrough verified | 0 |
 
 ## Batch screenshots (2026-09-16)
 
