@@ -57,8 +57,8 @@ git push origin v0.2.0
 
 Pushing the tag triggers `.github/workflows/release.yml`, which:
 
-1. **Builds standalone binaries** for Linux, macOS (x86_64 + aarch64), and Windows
-2. **Builds libretro cores** for the same platforms as `playdiaemu_libretro.<ext>`
+1. **Builds standalone binaries** for Linux (x86_64 + aarch64), macOS (x86_64 + aarch64), and Windows
+2. **Builds libretro cores** for those platforms plus Android, iOS, and webOS (as `playdiaemu_libretro.<ext>`)
 3. **Creates a draft GitHub Release** with:
    - Auto-generated release notes (PRs and commits since the previous tag)
    - All build artifacts attached
@@ -69,11 +69,26 @@ Pushing the tag triggers `.github/workflows/release.yml`, which:
 2. Find the draft release created by CI
 3. Review the auto-generated changelog — edit if needed
 4. Verify all expected artifacts are attached:
+
+   Standalone emulator:
+
    - `playdia-emu-linux-x86_64.tar.gz`
+   - `playdia-emu-linux-aarch64.tar.gz`
    - `playdia-emu-macos-x86_64.tar.gz`
    - `playdia-emu-macos-aarch64.tar.gz`
    - `playdia-emu-windows-x86_64.zip`
-   - `*-libretro.*` (one per platform)
+
+   Libretro cores (each archive contains `playdiaemu_libretro.<ext>` and `playdiaemu_libretro.info`):
+
+   - `playdia-emu-linux-x86_64-libretro.tar.gz`
+   - `playdia-emu-linux-aarch64-libretro.tar.gz`
+   - `playdia-emu-macos-x86_64-libretro.tar.gz`
+   - `playdia-emu-macos-aarch64-libretro.tar.gz`
+   - `playdia-emu-windows-x86_64-libretro.zip`
+   - `playdia-emu-android-libretro.tar.gz` (arm64-v8a, armeabi-v7a, x86, x86_64)
+   - `playdia-emu-ios-libretro.tar.gz` (device arm64+x86_64 + arm64 simulator)
+   - `playdia-emu-webos-libretro.tar.gz` (armv7)
+
 5. Click **Publish release**
 
 ### 6. Sync `.info` file to upstream libretro-super
