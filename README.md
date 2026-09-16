@@ -224,12 +224,14 @@ For the proven memory map, CDS-XA routing, and codec notes, see
 
 | Key | Button |
 |-----|--------|
-| Arrow Up/Down/Left/Right or W/A/S/D | D-pad |
-| Z or J | A |
-| X or K | B |
+| Arrow Up/Down/Left/Right | D-pad |
+| Z | A |
+| X | B |
 | Enter | Start |
-| Space | Select |
+| Right Shift | Select |
 | Escape | Exit |
+
+Use `--remap` to replace a binding (see [Standalone Emulator](docs/Standalone-Emulator.md)).
 
 ## Game Compatibility
 

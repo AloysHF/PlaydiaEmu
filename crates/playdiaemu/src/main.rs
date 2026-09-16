@@ -221,7 +221,7 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
 
     let frame_dt = Duration::from_millis((1000 / cli.fps.max(1)) as u64);
     log::info!(
-        "Window {}x{} fps={} volume={}  Esc=quit  Arrows  Z=A  X=B  Enter=Start  Space=Select",
+        "Window {}x{} fps={} volume={}  Esc=quit  Arrows  Z=A  X=B  Enter=Start  RShift=Select",
         window_width,
         window_height,
         cli.fps,
