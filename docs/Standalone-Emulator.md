@@ -6,11 +6,18 @@ command-line options.
 
 ## Supported Platforms
 
+Release CI builds the standalone `playdia-emu` binary for the targets below
+(see [Release Process](Release-Process.md)). Android / iOS / webOS receive
+libretro cores only, not standalone binaries.
+
 | Platform | Architecture | Status |
 |----------|-------------|--------|
-| Windows | x86_64 | Primary development |
-| Linux | x86_64 | Expected to work (CI on ubuntu-latest) |
-| macOS | x86_64, aarch64 | Expected to work |
+| Windows | x86_64 | Primary development; built in release CI |
+| Linux | x86_64 | Built in release CI |
+| Linux | aarch64 | Built in release CI |
+| macOS | x86_64 | Built in release CI |
+| macOS | aarch64 | Built in release CI |
+| Android / iOS / webOS | — | Libretro only (no standalone binary) |
 
 ## Installation
 
