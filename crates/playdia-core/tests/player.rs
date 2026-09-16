@@ -3,7 +3,7 @@ mod common;
 
 use playdia_core::content::{DiscImage, Track};
 use playdia_core::player::{DiscPlayer, PlayerStop};
-use playdia_core::{DiscKind, InputButtons};
+use playdia_core::{DiscKind, InputButtons, FB_HEIGHT, FB_WIDTH};
 
 fn synthetic_stream_disc() -> Vec<u8> {
     // 8 raw sectors: lead-in file0 + 6×F1 + F2
@@ -278,6 +278,9 @@ fn player_save_state_roundtrips_playback_position() {
     for _ in 0..8 {
         let _ = p1.run_frame();
     }
+    // Put non-zero pixels so length/shift bugs cannot hide behind zeros.
+    p1.video.framebuffer[0] = 0x00A1B2C3;
+    p1.video.framebuffer[FB_WIDTH * FB_HEIGHT - 1] = 0x0011FE07;
     let fb0 = p1.framebuffer().to_vec();
     let stats0 = p1.stats_line();
     let blob = p1.save_state();
@@ -288,6 +291,7 @@ fn player_save_state_roundtrips_playback_position() {
     assert_eq!(p2.frame, p1.frame);
     assert_eq!(p2.sector_cursor, p1.sector_cursor);
     assert_eq!(p2.framebuffer(), fb0.as_slice());
+    assert_eq!(p2.video.frames_decoded, p1.video.frames_decoded);
     assert_eq!(p2.stats_line(), stats0);
 
     // Wrong content must fail without mutating the player.

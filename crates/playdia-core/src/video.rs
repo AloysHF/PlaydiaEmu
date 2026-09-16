@@ -261,7 +261,7 @@ impl VideoDecoder {
             out.extend_from_slice(&(frame.len() as u32).to_le_bytes());
             out.extend_from_slice(frame);
         }
-        out.extend_from_slice(&self.framebuffer.len().to_le_bytes());
+        out.extend_from_slice(&(self.framebuffer.len() as u32).to_le_bytes());
         for px in &self.framebuffer {
             out.extend_from_slice(&px.to_le_bytes());
         }
