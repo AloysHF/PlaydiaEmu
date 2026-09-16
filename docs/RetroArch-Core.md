@@ -58,6 +58,18 @@ core metadata.
 - Host pacing at 30 fps (matches standalone HLE video slot rate)
 - Save states via libretro serialize / unserialize (version 2 envelope; disc CRC must match)
 
+## Core Options
+
+| Option key | Values | Default |
+|---|---|---|
+| `playdiaemu_volume` | 100…0% | 100% |
+| `playdiaemu_swap_ab` | disabled / enabled | disabled |
+| `playdiaemu_debug_logging` | disabled / enabled | disabled |
+
+Volume scales host PCM before submit. Swap A/B exchanges RetroPad A and B.
+Debug logging raises the `log` crate level to Debug so more records reach
+the RetroArch log.
+
 ## RetroPad Button Mapping
 
 | RetroPad Button | Playdia Button |
@@ -83,8 +95,8 @@ A/Start, B, Right, Left, Up, Down.
 
 ## Limitations
 
-- No core options UI yet
 - Cheats are stubbed (`retro_cheat_*` no-ops)
+- No memory maps (HLE player has no fixed guest address space)
 - No Android / iOS / webOS packaging docs yet
 
 ## Building notes
