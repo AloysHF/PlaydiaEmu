@@ -15,6 +15,10 @@ use crate::{FB_HEIGHT, FB_WIDTH};
 /// From Mari-nee: ~8 video slots + occasional audio every ~16 sectors.
 const SECTORS_PER_FRAME: u32 = 8;
 
+/// Host frames to wait at F2 choice/quiz prompts before applying timeout.
+/// Matches the ~10 s default used by the reference interactive handler.
+const CHOICE_TIMEOUT_FRAMES: u32 = 300;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerStop {
     Ok,
@@ -36,6 +40,8 @@ pub struct DiscPlayer {
     pub interactive: Vec<(u32, Vec<u8>)>,
     pub pcm: Vec<i16>,
     waiting: Option<[Option<u32>; 7]>,
+    wait_frames: u32,
+    timeout_dest: Option<u32>,
 }
 
 impl Default for DiscPlayer {
@@ -59,6 +65,8 @@ impl DiscPlayer {
             interactive: Vec::new(),
             pcm: Vec::new(),
             waiting: None,
+            wait_frames: 0,
+            timeout_dest: None,
         }
     }
 
@@ -93,6 +101,8 @@ impl DiscPlayer {
         self.interactive.clear();
         self.pcm.clear();
         self.waiting = None;
+        self.wait_frames = 0;
+        self.timeout_dest = None;
     }
 
     pub fn set_input(&mut self, held: InputButtons) {
@@ -100,12 +110,28 @@ impl DiscPlayer {
     }
 
     pub fn run_frame(&mut self) -> PlayerStop {
-        if let Some(destinations) = self.waiting {
+        if self.waiting.is_some() {
+            let mut target = None;
             if let Some(button) = pressed_choice(self.input.pressed) {
-                if let Some(target) = destinations[button] {
-                    if self.seek_lba(target) {
-                        self.waiting = None;
-                    }
+                if let Some(destinations) = self.waiting {
+                    target = destinations[button];
+                }
+            }
+            if target.is_none() {
+                self.wait_frames += 1;
+                if self.wait_frames >= CHOICE_TIMEOUT_FRAMES {
+                    target = self.timeout_choice_target();
+                    log::info!(
+                        "F2 choice timeout after {} frames → {:?}",
+                        self.wait_frames,
+                        target
+                    );
+                }
+            }
+            if let Some(target) = target {
+                if self.seek_lba(target) {
+                    self.waiting = None;
+                    self.wait_frames = 0;
                 }
             }
             if self.waiting.is_some() {
@@ -313,6 +339,7 @@ impl DiscPlayer {
                 }
                 self.resume_after(lba);
                 self.waiting = Some(destinations);
+                self.wait_frames = 0;
                 true
             }
             0x40 | 0x60 | 0x90 | 0xA0 => {
@@ -331,11 +358,28 @@ impl DiscPlayer {
                 let _ = self.seek_lba(target);
                 true
             }
-            0x80 => false,
+            0x80 => {
+                // Timeout modifier for a preceding/subsequent F2 44/50 choice:
+                // first destination slot is the fallback LBA (not a navigation command).
+                self.timeout_dest = destinations[0];
+                false
+            }
             kind => {
                 log::warn!("unknown F2 command {kind:#04x} at LBA {lba}");
                 false
             }
+        }
+    }
+
+    fn timeout_choice_target(&self) -> Option<u32> {
+        if let Some(target) = self.timeout_dest {
+            if self.valid_target(target) {
+                return Some(target);
+            }
+        }
+        match self.waiting {
+            Some(destinations) => destinations[0].filter(|&target| self.valid_target(target)),
+            None => None,
         }
     }
 
@@ -481,6 +525,14 @@ impl DiscPlayer {
             }
             None => p.push(0),
         }
+        p.extend_from_slice(&self.wait_frames.to_le_bytes());
+        match self.timeout_dest {
+            Some(lba) => {
+                p.push(1);
+                p.extend_from_slice(&lba.to_le_bytes());
+            }
+            None => p.push(0),
+        }
         for v in [
             self.demux.video_sectors,
             self.demux.audio_sectors,
@@ -534,6 +586,12 @@ impl DiscPlayer {
                 }
             }
             Some(dest)
+        };
+        self.wait_frames = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap());
+        self.timeout_dest = if take(&mut o, 1)?[0] == 0 {
+            None
+        } else {
+            Some(u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap()))
         };
         self.demux.video_sectors = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
         self.demux.audio_sectors = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
@@ -605,28 +663,33 @@ fn buttons_from_mask(m: u8) -> InputButtons {
 }
 
 fn command_address_to_lba(address: &[u8]) -> Option<u32> {
-    if address.len() != 3 || address[1] >= 60 {
+    if address.len() != 3 {
         return None;
     }
-    // F2 uses binary minutes, seconds and five-sector units, not CD MSF frames.
+    // F2 destinations are raw binary M/S/unit bytes (not BCD, not range-checked
+    // CD MSF): real discs encode second-like fields above 59.
+    // Unit is a five-sector counter: LBA = M×4500 + S×75 + unit×5 − 150.
     (u32::from(address[0]) * 4500 + u32::from(address[1]) * 75 + u32::from(address[2]) * 5)
         .checked_sub(150)
 }
 
 fn pressed_choice(buttons: InputButtons) -> Option<usize> {
-    // Six controller buttons precede the fallback destination.
-    if buttons.a || buttons.start {
+    // Reference interactive slots: B1=Start/default, B2=Up, B3=Down,
+    // B4=Left, B5=Right, B6=A, B7=B.
+    if buttons.start {
         Some(0)
-    } else if buttons.b {
+    } else if buttons.up {
         Some(1)
-    } else if buttons.right {
+    } else if buttons.down {
         Some(2)
     } else if buttons.left {
         Some(3)
-    } else if buttons.up {
+    } else if buttons.right {
         Some(4)
-    } else if buttons.down {
+    } else if buttons.a {
         Some(5)
+    } else if buttons.b {
+        Some(6)
     } else {
         None
     }

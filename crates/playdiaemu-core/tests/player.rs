@@ -130,8 +130,9 @@ fn interactive_choice_pauses_and_seeks_on_button_edge() {
     assert_eq!(player.track_index, 2);
     player.run_frame();
     assert_eq!(player.track_index, 2);
+    // B1/default slot is Start (destinations[0]: S=4 F=6 → LBA 180).
     player.set_input(InputButtons {
-        a: true,
+        start: true,
         ..Default::default()
     });
     player.run_frame();
@@ -188,12 +189,12 @@ fn b_choices_reach_complete_pictures_without_replaying_the_prompt() {
             f2[18] = 0x09;
             f2[24] = 0xF2;
             f2[25] = 0x44;
-            // Every other slot returns to the title; B advances to a new picture.
+            // Every other slot returns to the title; B (slot 6) advances.
             for slot in 0..7 {
                 let off = 27 + slot * 4;
                 f2[off..off + 3].copy_from_slice(&[0, 2, 2]);
             }
-            f2[31..34].copy_from_slice(&target);
+            f2[27 + 6 * 4..27 + 6 * 4 + 3].copy_from_slice(&target);
             let tail = &mut f2[24 + 0x23..2072];
             tail.fill(0xFF);
             tail[..picture.len() - 2047].copy_from_slice(&picture[2047..]);
@@ -214,6 +215,7 @@ fn b_choices_reach_complete_pictures_without_replaying_the_prompt() {
         }
         assert_eq!(player.run_frame(), PlayerStop::Ok);
         let title_crc = player.frame_crc();
+        // Slot 6 (B) carries the advance target in this fixture.
         let b = InputButtons {
             b: true,
             ..Default::default()
@@ -240,21 +242,22 @@ fn b_choices_reach_complete_pictures_without_replaying_the_prompt() {
 }
 
 #[test]
-fn horizontal_choices_use_the_disc_button_order() {
+fn horizontal_choices_use_reference_button_slots() {
+    // Reference slots: Left=B4(3), Right=B5(5→index 4).
     for (buttons, slot) in [
-        (
-            InputButtons {
-                right: true,
-                ..Default::default()
-            },
-            2,
-        ),
         (
             InputButtons {
                 left: true,
                 ..Default::default()
             },
             3,
+        ),
+        (
+            InputButtons {
+                right: true,
+                ..Default::default()
+            },
+            4,
         ),
     ] {
         let mut disc = interactive_disc(0x44);
@@ -269,6 +272,57 @@ fn horizontal_choices_use_the_disc_button_order() {
         assert_eq!(player.track_index, 160 + slot * 5 + 8);
         assert!(!player.is_waiting_for_input());
     }
+}
+
+#[test]
+fn choice_times_out_to_default_destination() {
+    let mut player = DiscPlayer::new();
+    player.disc = Some(interactive_disc(0x44));
+    player.run_frame();
+    assert!(player.is_waiting_for_input());
+    for _ in 0..300 {
+        player.set_input(InputButtons::default());
+        player.run_frame();
+    }
+    assert!(!player.is_waiting_for_input());
+    // Default timeout target is destinations[0] (S=4 F=6 → LBA 180 → index 170 + 8).
+    assert_eq!(player.track_index, 178);
+}
+
+#[test]
+fn f2_80_timeout_destination_is_used_before_default() {
+    let mut player = DiscPlayer::new();
+    let mut disc = interactive_disc(0x80);
+    // F2 80 slot0: S=4 F=4 → LBA 170 (different from default choice slot0 LBA 180).
+    disc.tracks[1].data[2352 + 27] = 0;
+    disc.tracks[1].data[2352 + 28] = 4;
+    disc.tracks[1].data[2352 + 29] = 4;
+    disc.tracks[1].data[2352 + 30] = 0;
+    player.disc = Some(disc);
+    player.run_frame();
+    assert!(!player.is_waiting_for_input());
+    assert_eq!(player.demux.interactive_cmds, 1);
+
+    // Next F2 at the same stream position is a choice; timeout_dest must stick.
+    let mut choice = interactive_disc(0x44);
+    choice.tracks[1].data[2352 + 24] = 0xF2;
+    choice.tracks[1].data[2352 + 25] = 0x44;
+    choice.tracks[1].data[2352 + 18] = 0x09;
+    player.sector_cursor = 0;
+    player.track_index = 0;
+    player.demux = playdiaemu_core::cd::XaDemux::new();
+    player.interactive.clear();
+    // Keep timeout_dest from the 0x80 command above; waiting is already None.
+    player.disc = Some(choice);
+    player.run_frame();
+    assert!(player.is_waiting_for_input());
+    for _ in 0..300 {
+        player.set_input(InputButtons::default());
+        player.run_frame();
+    }
+    assert!(!player.is_waiting_for_input());
+    // Timeout dest S=4 F=4 → LBA 170 → track 160 + 8 = 168 (not default 178).
+    assert_eq!(player.track_index, 168);
 }
 
 #[test]

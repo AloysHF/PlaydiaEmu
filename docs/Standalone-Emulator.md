@@ -59,8 +59,10 @@ cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 | `--press-at FRAME:BUTTON` | — | Inject a one-frame press; repeat for multiple inputs. Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start` |
 
 The HLE player follows F2 scene jumps and pauses at F2 button choices until a
-mapped button is pressed. CUE/BIN images provide the full-disc addresses needed
-for these jumps. Timeout, score, and quiz behavior is still incomplete.
+mapped button is pressed. Choices time out after about 10 seconds to the F2 80
+timeout destination, or the Start/default slot when none is set. CUE/BIN images
+provide the full-disc addresses needed for these jumps. Quiz/score semantics
+beyond timeout are still incomplete.
 The default decoder reconstructs 248×216 game pictures centered in the 320×240
 XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 27 rows before presenting a picture. Unknown
 codes or damaged packets retain the previous frame. Rare VLC entries and

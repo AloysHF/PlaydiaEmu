@@ -88,8 +88,9 @@ the RetroArch log.
 | Select | Select |
 | X / Y | Unused |
 
-At interactive F2 choice screens the same mapping selects destinations:
-A/Start, B, Right, Left, Up, Down.
+At interactive F2 choice screens destinations use the reference button slots:
+Start, Up, Down, Left, Right, A, B. Choices also time out (~10 s) to the
+F2 80 timeout destination, or slot 1 (Start/default) when no timeout is set.
 
 ## Timing
 

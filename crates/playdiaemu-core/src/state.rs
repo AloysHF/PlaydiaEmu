@@ -5,7 +5,8 @@ use thiserror::Error;
 
 pub const STATE_MAGIC: &[u8; 8] = b"PLAYDIA1";
 // Version 2 stores framebuffer pixels as little-endian XRGB8888 words.
-pub const STATE_VERSION: u16 = 2;
+// Version 3 adds F2 choice wait frames and timeout destination after the waiting block.
+pub const STATE_VERSION: u16 = 3;
 
 #[derive(Debug, Error)]
 pub enum SaveStateError {

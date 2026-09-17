@@ -100,8 +100,9 @@ Record:
   Dragon Ball Z and Mari-nee pictures are recognizable; this does not establish
   hardware pixel accuracy or full game compatibility. Use `playdia-frame
   --check-all` to measure entropy coverage separately from navigation.
-- F2 jump and button-choice navigation is exercised on local discs; timeout,
-  quiz, and score semantics have not been verified on hardware.
+- F2 jump and button-choice navigation is exercised on local discs. Choice
+  prompts time out (~10 s) to the F2 80 fallback or the default slot; quiz and
+  score semantics beyond timeout have not been verified on hardware.
 - Prefer `--release` builds for any visual check.
 - Do not commit discs, BIOS, or PPM dumps. Screenshots under `docs/images/`
   are PNG previews only.
