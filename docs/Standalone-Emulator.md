@@ -136,9 +136,3 @@ playdia-emu game.cue --debug-logging
 $env:RUST_LOG="debug"
 cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 30
 ```
-
-## See also
-
-- [Game File Formats](Game-File-Formats.md)
-- [Game Compatibility](Game-Compatibility.md)
-- [RetroArch Core](RetroArch-Core.md)

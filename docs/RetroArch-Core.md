@@ -114,9 +114,3 @@ The core is a `cdylib` with no extra host dependencies beyond `playdiaemu-core`:
 ```powershell
 cargo build --release -p playdiaemu-libretro
 ```
-
-## See also
-
-- [Standalone Emulator](Standalone-Emulator.md)
-- [Game File Formats](Game-File-Formats.md)
-- [Game Compatibility](Game-Compatibility.md)
