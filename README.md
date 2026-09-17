@@ -161,60 +161,13 @@ crates/
         └── playdia_frame.rs    # Decode one packet or --check-all
 ```
 
-### Core contract (`DiscPlayer`)
-
-The recommended player path is `playdiaemu_core::player::DiscPlayer` (same API
-as the standalone binary and libretro core). No BIOS is required.
-
-- `load_path` / `load_bytes` — `.cue` (+ bin), Redump-style `.zip`, or raw/cooked image
-- `reset`, `run_frame`, `set_input`
-- `framebuffer` → 320×240 XRGB8888 (`u32`, `0x00RRGGBB`)
-- `drain_audio` → interleaved stereo i16 @ 44100
-- `save_state` / `load_state` with content identity + CRC
-
-The library also contains an experimental LLE shell (`Machine` +
-`load_disc_*` / optional `load_bios_*`) for firmware research. Retail LLE boot
-needs a user-supplied 512 KiB BIOS; the libretro core does not use this path.
-
-For CDS-XA routing, video markers, codec notes, and the LLE memory map, see
+Standalone and the libretro core both drive the same HLE `DiscPlayer` (no
+BIOS). Sector layout, video markers, and codec notes live in
 [Game File Formats](docs/Game-File-Formats.md).
-
-## Key Mappings (Standalone window)
-
-| Key | Button |
-|-----|--------|
-| Arrow Up/Down/Left/Right | D-pad |
-| Z | A |
-| X | B |
-| Enter | Start |
-| Right Shift | Select |
-| Escape | Exit |
-
-Use `--remap` to replace a binding (see [Standalone Emulator](docs/Standalone-Emulator.md)).
 
 ## Game Compatibility
 
-HLE player (no BIOS). A small set of private Redump samples has been verified
-for load, stream routing, video frames, and audio PCM.
-
-| Title | Status |
-|-------|--------|
-| Mari-nee no Heya | Native title/button screen; HLE video/audio playback checked |
-| Playdia Sample Soft | Native menu and demo imagery; HLE playback checked |
-| Other Redump titles | See the 37-disc entropy report; complete playthroughs remain unverified |
-
-For the detailed matrix and how to update it, see
-[Game Compatibility](docs/Game-Compatibility.md).
-
-## Content Formats
-
-Most tested Playdia software uses dual-track CUE/BIN images with 2352-byte
-Mode2 sectors. Track 1 is ISO9660 data; Track 2 carries the interactive FMV /
-audio stream with F1/F2/F3 markers and XA ADPCM. Two tested titles use a single
-MODE2/2352 track instead.
-
-See [Game File Formats](docs/Game-File-Formats.md) for sector layout, Mode 2
-subheader bits, Form 2 audio groups, and video markers.
+For the detailed matrix, see [Game Compatibility](docs/Game-Compatibility.md).
 
 ## Contributing
 

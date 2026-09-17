@@ -1,5 +1,8 @@
 # Game Compatibility
 
+HLE player (no BIOS). Counts below cover batch screenshots, deeper integration
+checks, and structural entropy validation — not full playthroughs.
+
 ## Summary
 
 | Status | Count |
@@ -22,7 +25,9 @@ ZIPs are loaded in place (CUE+BIN inside the archive) — no extraction step.
 These frames establish startup / early demo rendering only. They do not prove
 navigation completeness, audio quality on host sinks, save data, full
 playthrough, or hardware pixel accuracy. Two titles additionally have deeper
-HLE player integration checks (Mari-nee no Heya, Sample Soft).
+HLE player integration checks: Mari-nee no Heya (native title/button screen;
+load, stream, video, audio) and Sample Soft (native menu and demo imagery;
+load, stream, video, audio).
 
 ## Game List
 

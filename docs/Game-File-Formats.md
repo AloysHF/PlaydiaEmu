@@ -9,10 +9,15 @@ player.
 | Kind | Notes |
 |------|-------|
 | Dual-track CUE/BIN | Preferred. Raw 2352-byte Mode2 sectors. |
+| Single-track MODE2/2352 | One raw MODE2 track (no separate ISO9660 data track). Two titles in the 37-disc corpus use this layout. |
 | ZIP archive | Redump-style zip containing `.cue` + track bins, or a single `.bin`/`.iso`. Loaded in-process; no extract step. |
 | Cooked ISO9660 | 2048-byte sectors; no XA realtime path. |
 
-Typical layout:
+Most tested Playdia software uses dual-track CUE/BIN: Track 1 is ISO9660
+data; Track 2 carries the interactive FMV / audio stream with F1/F2/F3
+markers and XA ADPCM.
+
+Typical dual-track layout:
 
 - **Track 1** — ISO9660 data (file IDs such as `0A000001.DAT`)
 - **Track 2** — interactive FMV / audio stream (the payload the HLE player consumes)
