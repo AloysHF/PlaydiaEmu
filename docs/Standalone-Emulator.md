@@ -38,7 +38,6 @@ playdia-emu [OPTIONS] DISC
 There are no subcommands. With a disc path and no `--headless`, the windowed
 HLE player opens. `--headless` runs the HLE disc player without a window.
 `-S/--screenshot` always runs headless for `--screenshot-frames` and exits.
-Disc inspection lives in `playdiaemu-tools` (`playdia-inspect`).
 
 ## HLE disc player (recommended, no BIOS)
 
@@ -121,62 +120,6 @@ and `--screenshot` apply only to the headless path.
 | Escape | Exit |
 
 Use `--remap` to replace a binding (for example `--remap a:space`). Escape is reserved for exit.
-
-## Inspect
-
-Disc inspection is provided by `playdiaemu-tools` (`playdia-inspect`). Print disc
-kind, tracks, CRC, ISO volume label sample, and stream-track F1/F2/F3 / audio
-sector counts:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-headers
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-rows
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-candidates
-```
-
-The video commands assemble F1/F2 packets without exporting video data. The
-candidate report also ranks low-entropy bodies and long `0x55`/`0xAA` runs,
-including track-relative LBAs for follow-up codec analysis. These are encoded
-bitstream patterns, not evidence of pixel-accurate decoding.
-The row report counts ordered 27-row candidates and ambiguous matches. F2
-overflow contributes actual video bytes; FF-filled F3 sectors preserve pending
-video. Interactive F2 sectors also finish pending video before a choice or
-jump. See [AK8000 research](AK8000-Research.md) for decoder facts and limits.
-
-For native picture output and strict entropy validation:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
-```
-
-This tool reads pictures in disc order without following scene commands.
-Indices start at 1 and include interactive F2 pictures. `--check-all` reports
-failed packet indices, track-relative LBAs, rows, blocks and bit offsets, and
-exits unsuccessfully if any picture fails. CUEs and raw MODE2/2352 BIN tracks
-are supported. `--assembled` accepts an already assembled packet for isolated
-debugging. PPM output is 248×216 RGB888. The player and its 320×240 PPM screenshots
-preserve exactly the same channel precision, with a centered black border.
-
-## Batch screenshots
-
-`scripts/batch-screenshots.ps1` captures a PNG for every disc under a folder.
-Output goes to `docs/images/`. Redump-style ZIPs are loaded in place:
-
-```powershell
-# Rebuild release binary, then capture every .zip under -RedumpDir
-.\scripts\batch-screenshots.ps1 -RedumpDir <local-redump-folder>
-
-# Existing binary, extracted CUE/BIN tree under tmp\playdia_game
-.\scripts\batch-screenshots.ps1 -SkipBuild -GameDir tmp\playdia_game
-```
-
-Optional: `-Frames` (default 300, with a few title-screen overrides that may
-also inject `--press-at` to leave the BANDAI boot logo), `-TimeoutSeconds`
-(default 300), `-Binary`, `-SkipBuild`. Do not commit disc images; only the
-PNG previews and the script belong in the repository. See
-[Game Compatibility](Game-Compatibility.md) for the published matrix.
 
 ## Audio Output
 

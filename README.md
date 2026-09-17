@@ -68,9 +68,7 @@ cargo run --release -p playdiaemu -- path\to\game.zip
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
 installation, keyboard controls, headless mode, screenshots/PPM dumps, and all
-command-line options. Batch title-screen captures live in
-`scripts/batch-screenshots.ps1`; the published matrix is
-[Game Compatibility](docs/Game-Compatibility.md).
+command-line options.
 
 ### RetroArch Mode
 
@@ -88,19 +86,6 @@ Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
 |--------|---------|---------|
 | Standalone (`playdia-emu`) | `cargo build --release -p playdiaemu` | Binary: `target/release/playdia-emu` (`.exe` on Windows). Full CLI, keys, headless: [Standalone Emulator](docs/Standalone-Emulator.md) |
 | Libretro core | `cargo build --release -p playdiaemu-libretro` | Rename cdylib → `playdiaemu_libretro.<ext>` and install `.info`: [RetroArch Core](docs/RetroArch-Core.md) |
-
-### Tools
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-```
-
-Inspector flags (`--video-headers`, `--video-rows`, `--video-candidates`) and
-`playdia-frame --check-all`: see [Standalone Emulator](docs/Standalone-Emulator.md).
-Decoder facts: [AK8000 research](docs/AK8000-Research.md). A
-[37-disc validation run](docs/AK8000-Corpus-Validation.md) measures entropy
-coverage only — not full game compatibility or hardware pixel accuracy.
 
 ## Testing
 
