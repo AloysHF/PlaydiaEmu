@@ -9,10 +9,15 @@ player.
 | Kind | Notes |
 |------|-------|
 | Dual-track CUE/BIN | Preferred. Raw 2352-byte Mode2 sectors. |
+| Single-track MODE2/2352 | One raw MODE2 track (no separate ISO9660 data track). Two titles in the 37-disc corpus use this layout. |
 | ZIP archive | Redump-style zip containing `.cue` + track bins, or a single `.bin`/`.iso`. Loaded in-process; no extract step. |
 | Cooked ISO9660 | 2048-byte sectors; no XA realtime path. |
 
-Typical layout:
+Most tested Playdia software uses dual-track CUE/BIN: Track 1 is ISO9660
+data; Track 2 carries the interactive FMV / audio stream with F1/F2/F3
+markers and XA ADPCM.
+
+Typical dual-track layout:
 
 - **Track 1** — ISO9660 data (file IDs such as `0A000001.DAT`)
 - **Track 2** — interactive FMV / audio stream (the payload the HLE player consumes)
@@ -50,14 +55,14 @@ Payload[0]:
 - `0xF2` — append payload[0x23..0x800] and end pending video; submode bit 0
   additionally selects interactive command handling
 - `0xF3` — preserve pending video for 2048-byte sectors whose bytes[3..] are FF;
-  other F3 forms retain the legacy reset behavior pending further evidence
+  other F3 forms currently reset pending video (pending further evidence)
 
 Interactive F2 sectors (`submode` bit 0 set) contain a command byte followed by
 seven four-byte button destinations. Each destination stores binary minute,
-second, frame, and an extra byte; the absolute disc LBA is
-`minute × 4500 + second × 75 + frame − 150`. The HLE player follows known
-scene jumps and button choices within the stream track. Other command effects
-remain under investigation.
+second, a five-sector unit (not a CD MSF frame), and an extra byte; the absolute
+disc LBA is `minute × 4500 + second × 75 + unit × 5 − 150`. The HLE player
+follows known scene jumps and button choices within the stream track. Other
+command effects remain under investigation.
 Interactive F2 sectors also carry video tails. The HLE player finishes and
 presents the latest queued preview before handling the control command, so
 waiting for input does not freeze on an earlier queued picture.
@@ -68,11 +73,10 @@ qtables), then F1 fragments, then F2 end.
 The picture header is 36 bytes: a 19-bit picture start code (0x400), 3-bit
 picture type, 2-bit quantizer shift, 8-bit factor and two 16-byte tables.
 MSB-first row markers follow: 14-bit 0x20 and a 5-bit row number (1..27).
-Consequently bytes 38 and 39 span the row number and entropy data; the previous
-independent "segment code" and "flags" interpretation was incorrect.
-The inspector now labels byte 38 as raw data. It anchors the 14-bit 0x21
-terminator to final zero bits and FF padding, since that pattern also occurs
-inside entropy. Ordered row marker matches can still be ambiguous.
+Bytes 38 and 39 span the row number and entropy data (not independent
+segment/flag fields). The inspector labels byte 38 as raw data and anchors the
+14-bit 0x21 terminator to final zero bits and FF padding, since that pattern
+also occurs inside entropy. Ordered row marker matches can still be ambiguous.
 
 ## Video path (recovered syntax)
 
@@ -98,15 +102,8 @@ Raw framebuffer dumps and framebuffer CRCs use four little-endian bytes per
 pixel (B, G, R, 0), totaling 307,200 bytes for 320×240. Save-state version 2
 stores this format; version 1 RGB555 states are rejected before loading.
 
-The earlier 26-row assumption merged rows 26 and 27. Counting 186 literal
-EOBs was also insufficient because full blocks omit EOB. The native path
-validates coefficient bounds and the next marker at the exact consumed bit
-position; it does not search ahead to hide entropy errors.
-An independent survey of 35 data-track discs found the expected initial packet
-prefix in all 900,268 assembled video packets; it did not validate picture decode.
-The old 192×144 preview is retained for the parameter-sweep research tool via
-`CodecParams::legacy_preview`. Its bit-order and AC options do not affect
-native playback.
+The native path validates coefficient bounds and the next marker at the exact
+consumed bit position; it does not search ahead to hide entropy errors.
 
 ## Memory map (LLE / hardware access dump)
 
@@ -129,6 +126,6 @@ Mode 2 sectors:
 - channel 0 + submode bit3 `0x08` → data markers in payload[0]:
   - `0xF1` video fragment
   - `0xF2` frame end (submode bit0 clear) or interactive command (bit0 set)
-  - `0xF3` FF-filled padding (other forms retain legacy reset handling)
+  - `0xF3` FF-filled padding (other forms currently reset pending video)
 
 PID/subheader conventions seen on real discs: `0x61` video, `0x62` audio.

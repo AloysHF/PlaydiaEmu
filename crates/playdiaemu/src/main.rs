@@ -88,7 +88,7 @@ fn main() -> Result<()> {
         bail!("provide a disc path (optional --headless)");
     };
 
-    // Screenshot runs headless for --screenshot-frames, matching spmp8000-emu / dingoo-emu.
+    // Screenshot always runs headless for --screenshot-frames, then exits.
     if cli.screenshot.is_some() || cli.headless {
         let (frames, screenshot) = match cli.screenshot.as_deref() {
             Some(path) => (cli.screenshot_frames, Some(path)),
@@ -221,7 +221,7 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
 
     let frame_dt = Duration::from_millis((1000 / cli.fps.max(1)) as u64);
     log::info!(
-        "Window {}x{} fps={} volume={}  Esc=quit  Arrows  Z=A  X=B  Enter=Start  Space=Select",
+        "Window {}x{} fps={} volume={}  Esc=quit  Arrows  Z=A  X=B  Enter=Start  RShift=Select",
         window_width,
         window_height,
         cli.fps,

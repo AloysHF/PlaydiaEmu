@@ -6,13 +6,20 @@ limitations.
 
 ## Supported Platforms
 
+Columns match the [release workflow](https://github.com/AloysHF/PlaydiaEmu/blob/master/.github/workflows/release.yml):
+desktop rows build both a standalone binary and a libretro core; mobile/webOS
+rows are libretro artifacts only.
+
 | Platform | Architecture | Standalone | Libretro |
 |----------|-------------|------------|----------|
-| Windows | x86_64 | ✅ | ✅ (build from source) |
-| Linux | x86_64, aarch64 | Expected | Expected |
-| macOS | x86_64, aarch64 | Expected | Expected |
-| Android | — | — | Built in CI (artifact only) |
-| iOS | — | — | Built in CI (artifact only) |
+| Windows | x86_64 | ✅ Built in CI | ✅ Built in CI |
+| Linux | x86_64 | ✅ Built in CI | ✅ Built in CI |
+| Linux | aarch64 | ✅ Built in CI | ✅ Built in CI |
+| macOS | x86_64 | ✅ Built in CI | ✅ Built in CI |
+| macOS | aarch64 | ✅ Built in CI | ✅ Built in CI |
+| Android | arm64-v8a, armeabi-v7a, x86, x86_64 | — | ✅ Built in CI (artifact only) |
+| iOS | arm64 + x86_64 device, arm64 simulator | — | ✅ Built in CI (artifact only) |
+| webOS | armv7 | — | ✅ Built in CI (artifact only) |
 
 ## Installation
 
@@ -97,7 +104,8 @@ A/Start, B, Right, Left, Up, Down.
 
 - Cheats are stubbed (`retro_cheat_*` no-ops)
 - No memory maps (HLE player has no fixed guest address space)
-- No Android / iOS / webOS packaging docs yet
+- Android / iOS / webOS cores are built as CI artifacts; install guides for
+  those frontends are not documented yet
 
 ## Building notes
 
@@ -106,9 +114,3 @@ The core is a `cdylib` with no extra host dependencies beyond `playdiaemu-core`:
 ```powershell
 cargo build --release -p playdiaemu-libretro
 ```
-
-## See also
-
-- [Standalone Emulator](Standalone-Emulator.md)
-- [Game File Formats](Game-File-Formats.md)
-- [Game Compatibility](Game-Compatibility.md)

@@ -1,5 +1,8 @@
 # Game Compatibility
 
+HLE player (no BIOS). Counts below cover batch screenshots, deeper integration
+checks, and structural entropy validation — not full playthroughs.
+
 ## Summary
 
 | Status | Count |
@@ -8,7 +11,7 @@
 | HLE player integration checks (load + stream + video + audio) | 2 |
 | Native entropy validation across complete disc streams | 37 |
 
-## Batch screenshots (2026-09-16)
+## Batch screenshots
 
 All 37 Redump ZIP titles completed `scripts/batch-screenshots.ps1` against the
 release `playdia-emu` binary and wrote a non-blank PNG under `docs/images/`.
@@ -22,7 +25,11 @@ ZIPs are loaded in place (CUE+BIN inside the archive) — no extraction step.
 These frames establish startup / early demo rendering only. They do not prove
 navigation completeness, audio quality on host sinks, save data, full
 playthrough, or hardware pixel accuracy. Two titles additionally have deeper
-HLE player integration checks (Mari-nee no Heya, Sample Soft).
+HLE player integration checks: Mari-nee no Heya (native title/button screen;
+load, stream, video, audio) and Sample Soft (native menu and demo imagery;
+load, stream, video, audio).
+
+Last published capture run: 2026-09-16.
 
 ## Game List
 
@@ -76,25 +83,9 @@ Legend:
 
 ## How to update
 
-Regenerate the published matrix (ZIPs in place; private path is not committed):
-
-```powershell
-.\scripts\batch-screenshots.ps1 -RedumpDir <local-redump-folder>
-```
-
-Inspect a title:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- "path/to/title.cue"
-```
-
-Play headlessly and dump a frame:
-
-```powershell
-cargo run --release -p playdiaemu -- `
-  "path/to/title.cue" `
-  --headless --frames 120
-```
+Regenerate the published matrix with `scripts/batch-screenshots.ps1`
+(`-RedumpDir`; disc paths are not committed). Inspect and headless check
+commands: [Tools](Tools.md).
 
 Record:
 
@@ -109,7 +100,7 @@ Record:
   Dragon Ball Z and Mari-nee pictures are recognizable; this does not establish
   hardware pixel accuracy or full game compatibility. Use `playdia-frame
   --check-all` to measure entropy coverage separately from navigation.
-- F2 jump and button-choice navigation is exercised on a private disc; timeout,
+- F2 jump and button-choice navigation is exercised on local discs; timeout,
   quiz, and score semantics have not been verified on hardware.
 - Prefer `--release` builds for any visual check.
 - Do not commit discs, BIOS, or PPM dumps. Screenshots under `docs/images/`

@@ -68,87 +68,24 @@ cargo run --release -p playdiaemu -- path\to\game.zip
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
 installation, keyboard controls, headless mode, screenshots/PPM dumps, and all
-command-line options. Batch title-screen captures live in
-`scripts/batch-screenshots.ps1`; the published matrix is
-[Game Compatibility](docs/Game-Compatibility.md).
+command-line options.
 
 ### RetroArch Mode
 
 Build the libretro core and load a disc image through RetroArch's
-**Load Content** menu:
-
-```powershell
-cargo build --release -p playdiaemu-libretro
-```
-
-The libretro core uses the same HLE disc player as the standalone emulator
-(dual-track MODE2 CUE/BIN, F1/F2/F3, XA audio; no BIOS). See the
-[RetroArch Core](docs/RetroArch-Core.md) guide for installation, RetroPad
-mapping, supported features, and current limitations.
+**Load Content** menu. The core uses the same HLE disc player as the
+standalone emulator (no BIOS). See [RetroArch Core](docs/RetroArch-Core.md)
+for build, install (cdylib rename + `.info`), RetroPad mapping, features,
+and limitations.
 
 ## Building
 
 Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
 
-### Standalone Mode
-
-```powershell
-cargo build --release -p playdiaemu
-cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
-```
-
-### Window frontend
-
-```powershell
-cargo build --release -p playdiaemu
-```
-
-The binary is produced at `target\release\playdia-emu.exe` (`.exe` on Windows).
-
-### Libretro Core (for RetroArch)
-
-```powershell
-cargo build --release -p playdiaemu-libretro
-```
-
-Cargo names the cdylib after its lib target, so this produces
-`playdiaemu.dll` on Windows (`libplaydiaemu.so` on Linux,
-`libplaydiaemu.dylib` on macOS) under `target/release/`. Rename it to
-`playdiaemu_libretro.<ext>` before placing it in RetroArch's `cores/`
-directory. Copy `playdiaemu_libretro.info` into RetroArch's `info/`
-directory.
-
-### Tools
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue
-```
-
-For video packet header frequencies, run
-`cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-headers`.
-Add `--video-candidates` to rank packets by low body-byte entropy and long
-`0x55`/`0xAA` runs. The reported track-relative LBAs help target codec research;
-these patterns do not establish decoded pixels or a VLC table.
-Use `--video-rows` to count MSB-first 27-row sequences, ambiguous marker matches,
-and picture terminators in F2 tails. Packet assembly preserves pending video
-across FF-filled F3 sectors. See [AK8000 research](docs/AK8000-Research.md) for
-evidence, the recovered decoder and remaining pixel-accuracy questions.
-`python tools/probe_sparse_vlc.py path\to\track.bin` checks a conservative partial
-codeword grammar on short rows; it also accepts a ZIP containing Track 2.
-Its counts are research diagnostics, not decoded coefficients or game pixels.
-
-Decode a specific picture without navigating the game, or validate a whole disc:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
-```
-
-Packet numbers start at 1 and include interactive F2 packets. The frame tool
-exports 248×216 RGB888 PPMs; the player exports the same RGB888 colors
-centered in 320×240. Neither path reduces channels to five bits. A [37-disc validation run](docs/AK8000-Corpus-Validation.md) passed
-1,135,531 of 1,135,539 picture packets; eight packets end inside their final row.
-This measures entropy coverage, not full game compatibility or hardware pixel accuracy.
+| Target | Command | Details |
+|--------|---------|---------|
+| Standalone (`playdia-emu`) | `cargo build --release -p playdiaemu` | Binary: `target/release/playdia-emu` (`.exe` on Windows). Full CLI, keys, headless: [Standalone Emulator](docs/Standalone-Emulator.md) |
+| Libretro core | `cargo build --release -p playdiaemu-libretro` | Rename cdylib → `playdiaemu_libretro.<ext>` and install `.info`: [RetroArch Core](docs/RetroArch-Core.md) |
 
 ## Testing
 
@@ -168,79 +105,53 @@ decode or visual check; debug builds are for unit tests and fast iteration only.
 crates/
 ├── playdiaemu-core/            # Platform-independent emulator engine (library)
 │   └── src/
-│       ├── lib.rs           # Crate root
-│       ├── machine.rs       # LLE machine (SH-1 + bus + CDXA device)
-│       ├── player.rs        # HLE DiscPlayer (Track 2 stream)
-│       ├── sh1.rs           # SH-1 interpreter subset
-│       ├── bus.rs           # Address space + diagnostics
-│       ├── cd.rs            # Disc image / CUE/BIN loading
-│       ├── cdx.rs           # CDS-XA demux and routing
-│       ├── audio.rs         # XA ADPCM decode + resample
-│       ├── video.rs         # F1 packet / DCT path
-│       ├── bitstream.rs     # Bit reader
-│       ├── ac_tables.rs     # Coefficient / VLC tables
-│       ├── input.rs         # Button state
-│       ├── state.rs         # Save-state envelope
-│       ├── content.rs       # Content identity
-│       └── diagnostics.rs   # Unmapped / unknown / budget counters
-├── playdiaemu/              # Standalone binary (→ playdia-emu)
+│       ├── lib.rs              # Crate root
+│       ├── machine.rs          # LLE machine (SH-1 + bus + CDXA device)
+│       ├── player.rs           # HLE DiscPlayer (Track 2 stream)
+│       ├── sh1.rs              # SH-1 interpreter subset
+│       ├── bus.rs              # Address space + diagnostics
+│       ├── cd.rs               # Disc image / CUE/BIN helpers
+│       ├── cdx.rs              # LLE CDXA device (shared MMIO window)
+│       ├── content.rs          # Disc load (CUE/BIN, ZIP, raw/cooked) + demux types
+│       ├── audio.rs            # XA ADPCM decode + resample
+│       ├── video.rs            # F1 packet assembly / presentation path
+│       ├── video/
+│       │   ├── ak8000.rs       # Native AK8000 entropy / pixel decode
+│       │   └── structure.rs    # Picture header, row markers, F1/F2 fragments
+│       ├── bitstream.rs        # Bit reader
+│       ├── ac_tables.rs        # Coefficient / VLC tables
+│       ├── input.rs            # Button state
+│       ├── state.rs            # Save-state envelope
+│       └── diagnostics.rs      # Unmapped / unknown / budget counters
+├── playdiaemu/                 # Standalone binary (→ playdia-emu)
 │   └── src/
-│       └── main.rs          # Window + CLI (window / --headless)
+│       ├── main.rs             # Window + CLI (window / --headless)
+│       ├── keyboard.rs         # Default keys + --remap
+│       ├── gamepad.rs          # Physical gamepad (gilrs)
+│       └── gamepad_overlay.rs  # On-screen button overlay
 ├── playdiaemu-libretro/        # libretro cdylib (→ playdiaemu_libretro.{dll,so,dylib})
 │   ├── playdiaemu_libretro.info
-│   └── src/lib.rs           # libretro C ABI
-└── playdiaemu-tools/           # ISO/XA inspector and research utilities
+│   └── src/
+│       ├── lib.rs              # C ABI entry + core state
+│       ├── api.rs              # retro_* implementation
+│       ├── callbacks.rs        # Frontend callback storage
+│       ├── constants.rs        # Timing, device IDs, performance level
+│       ├── logger.rs           # log → RetroArch log bridge
+│       └── types.rs            # libretro C types
+└── playdiaemu-tools/           # Inspector and research utilities
     └── src/bin/
-        ├── playdia_inspect.rs
-        └── playdia_scan.rs
+        ├── playdia_inspect.rs  # Sector / F1–F3 / audio counts
+        ├── playdia_scan.rs     # Research scan helper
+        └── playdia_frame.rs    # Decode one packet or --check-all
 ```
 
-### Core contract
-
-- `load_disc_*` / optional `load_bios_*`
-- `reset`, `run_frame`, `set_input`
-- `framebuffer` → 320×240 XRGB8888 (`u32`, `0x00RRGGBB`)
-- `drain_audio` → interleaved stereo i16 @ 44100
-- `save_state` / `load_state` with content identity + CRC
-- diagnostics for unmapped access and unknown opcodes
-
-For the proven memory map, CDS-XA routing, and codec notes, see
+Standalone and the libretro core both drive the same HLE `DiscPlayer` (no
+BIOS). Sector layout, video markers, and codec notes live in
 [Game File Formats](docs/Game-File-Formats.md).
-
-## Key Mappings (Standalone window)
-
-| Key | Button |
-|-----|--------|
-| Arrow Up/Down/Left/Right or W/A/S/D | D-pad |
-| Z or J | A |
-| X or K | B |
-| Enter | Start |
-| Space | Select |
-| Escape | Exit |
 
 ## Game Compatibility
 
-HLE player (no BIOS). A small set of private Redump samples has been verified
-for load, stream routing, video frames, and audio PCM.
-
-| Title | Status |
-|-------|--------|
-| Mari-nee no Heya | Native title/button screen; HLE video/audio playback checked |
-| Playdia Sample Soft | Native menu and demo imagery; HLE playback checked |
-| Other Redump titles | See the 37-disc entropy report; complete playthroughs remain unverified |
-
-For the detailed matrix and how to update it, see
-[Game Compatibility](docs/Game-Compatibility.md).
-
-## Content Formats
-
-Most tested Playdia software uses dual-track CUE/BIN images with 2352-byte
-Mode2 sectors. Track 1 is ISO9660 data; Track 2 carries the interactive FMV /
-audio stream with F1/F2/F3 markers and XA ADPCM. Two tested titles use a single
-MODE2/2352 track instead.
-
-See [Game File Formats](docs/Game-File-Formats.md) for sector layout, Mode 2
-subheader bits, Form 2 audio groups, and video markers.
+For the detailed matrix, see [Game Compatibility](docs/Game-Compatibility.md).
 
 ## Contributing
 

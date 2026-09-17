@@ -5,8 +5,8 @@ const STICK_DEADZONE: f32 = 0.5;
 
 /// Polls the first connected physical gamepad and maps it onto Playdia buttons.
 ///
-/// Face buttons follow the same RetroPad convention as dingoo-emu: East鈫扐,
-/// South鈫払. Left/right sticks also act as a digital D-pad past the deadzone.
+/// Face buttons use RetroPad East → A and South → B. Left/right sticks also
+/// act as a digital D-pad past the deadzone.
 pub struct GamepadMapper {
     gilrs: Option<Gilrs>,
     swap_ab: bool,

@@ -1,9 +1,9 @@
 # Native AK8000 corpus validation
 
-Validation date: 2026-09-13. The recovered Rust entropy decoder was applied to
-all picture packets in 37 local disc archives: 35 dual-track titles and two
-single-track MODE2/2352 titles. Compressed bytes were assembled from F1 and
-F2 sectors, including interactive F2 tails and intervening F3 padding.
+The native Rust entropy decoder was applied to all picture packets in 37 local
+disc archives: 35 dual-track titles and two single-track MODE2/2352 titles.
+Compressed bytes were assembled from F1 and F2 sectors, including interactive
+F2 tails and intervening F3 padding. Validation date: 2026-09-13.
 
 **1,135,531 of 1,135,539 packets pass** (99.9993%). All pictures in 36 discs
 pass. Success requires exactly 27 ordered rows, 186 blocks per row, bounded
@@ -12,25 +12,19 @@ end implicitly; the validator does not require 186 literal EOBs or resynchronize
 by scanning for a later row marker.
 
 These are structural decoder results, not hardware pixel comparisons or
-complete game compatibility scores. Discs used for codebook discovery and
-refinement are included; the aggregate is a regression/coverage result, not
-a held-out accuracy claim.
-The table was not changed during the complete 37-disc pass.
+complete game compatibility scores. The aggregate is a regression/coverage
+result, not a held-out accuracy claim. The entropy table was unchanged during
+the full 37-disc pass.
 
 ## Reproduction
 
-Extract a local disc archive and run:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-```
-
+Extract a local disc archive and run `playdia-frame --check-all` (optional
+`--packet` PPM export). Commands and flags: [Tools](Tools.md#playdia-frame).
 Raw MODE2/2352 BIN tracks are also accepted. Packet indices are one-based and
 include interactive F2 pictures. The command does not follow scene navigation.
-The validation run streamed ZIP contents into the same Rust validator through
-a local research adapter; the CLI validates extracted tracks directly.
-No disc bytes or screenshots are distributed with these results.
+ZIP archives can be validated via a local adapter that streams into the same
+Rust validator; the CLI validates extracted tracks directly. No disc bytes or
+screenshots are distributed with these results.
 
 ## Results
 
@@ -81,7 +75,7 @@ Aqua Adventure packet indices 26562, 26563, 26564, 26565, 26599, 26648,
 available from five F1 sectors and the F2 tail, without a terminal marker or
 FF padding. The checked F2 sectors for packets 26562 and 26563 have correct
 Mode2 Form1 EDCs, as does the preceding valid packet's F2 sector. This supports
-source video truncation rather than a read error in those sectors; the original
+source video truncation rather than a read error in those sectors. The original
 encoding cause has not been established.
 
 The current player preserves the previous complete picture. It does not invent
