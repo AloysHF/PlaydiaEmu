@@ -26,7 +26,7 @@ minifb = "0.28"
 rodio = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 gilrs = "=0.11.2"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
 
 [profile.release]
 opt-level = 3
