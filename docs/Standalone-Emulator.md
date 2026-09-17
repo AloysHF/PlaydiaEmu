@@ -77,11 +77,11 @@ Screenshot-only (30 frames by default):
 playdia-emu game.cue -S preview.png --screenshot-frames 60
 ```
 
-Example (private research corpus — do not commit discs):
+Example with a local disc path (do not commit discs):
 
 ```powershell
 cargo run --release -p playdiaemu -- `
-  "tmp/iso/Mari-nee no Heya (Japan)/Mari-nee no Heya (Japan).cue" `
+  "path\to\game.cue" `
   --headless --frames 90
 ```
 
@@ -141,11 +141,8 @@ including track-relative LBAs for follow-up codec analysis. These are encoded
 bitstream patterns, not evidence of pixel-accurate decoding.
 The row report counts ordered 27-row candidates and ambiguous matches. F2
 overflow contributes actual video bytes; FF-filled F3 sectors preserve pending
-video. See [AK8000 research](AK8000-Research.md) for the current evidence.
-Interactive F2 sectors also finish pending video before a choice or jump.
-The pure-Python `tools/probe_sparse_vlc.py` accepts a raw Track 2 BIN or its ZIP
-and reports complete 186-block candidates, wrong counts and unresolved rows.
-Its optional `--candidate-family` and `--gamma` rules remain unverified.
+video. Interactive F2 sectors also finish pending video before a choice or
+jump. See [AK8000 research](AK8000-Research.md) for decoder facts and limits.
 
 For native picture output and strict entropy validation:
 

@@ -96,12 +96,11 @@ cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cu
 cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
 ```
 
-Inspector flags (`--video-headers`, `--video-rows`, `--video-candidates`),
-`playdia-frame --check-all`, and research notes: see
-[Standalone Emulator](docs/Standalone-Emulator.md) and
-[AK8000 research](docs/AK8000-Research.md). A [37-disc validation run](docs/AK8000-Corpus-Validation.md)
-measures entropy coverage only — not full game compatibility or hardware
-pixel accuracy.
+Inspector flags (`--video-headers`, `--video-rows`, `--video-candidates`) and
+`playdia-frame --check-all`: see [Standalone Emulator](docs/Standalone-Emulator.md).
+Decoder facts: [AK8000 research](docs/AK8000-Research.md). A
+[37-disc validation run](docs/AK8000-Corpus-Validation.md) measures entropy
+coverage only — not full game compatibility or hardware pixel accuracy.
 
 ## Testing
 

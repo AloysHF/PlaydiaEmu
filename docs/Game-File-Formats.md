@@ -55,7 +55,7 @@ Payload[0]:
 - `0xF2` — append payload[0x23..0x800] and end pending video; submode bit 0
   additionally selects interactive command handling
 - `0xF3` — preserve pending video for 2048-byte sectors whose bytes[3..] are FF;
-  other F3 forms retain the legacy reset behavior pending further evidence
+  other F3 forms currently reset pending video (pending further evidence)
 
 Interactive F2 sectors (`submode` bit 0 set) contain a command byte followed by
 seven four-byte button destinations. Each destination stores binary minute,
@@ -73,11 +73,10 @@ qtables), then F1 fragments, then F2 end.
 The picture header is 36 bytes: a 19-bit picture start code (0x400), 3-bit
 picture type, 2-bit quantizer shift, 8-bit factor and two 16-byte tables.
 MSB-first row markers follow: 14-bit 0x20 and a 5-bit row number (1..27).
-Consequently bytes 38 and 39 span the row number and entropy data; the previous
-independent "segment code" and "flags" interpretation was incorrect.
-The inspector now labels byte 38 as raw data. It anchors the 14-bit 0x21
-terminator to final zero bits and FF padding, since that pattern also occurs
-inside entropy. Ordered row marker matches can still be ambiguous.
+Bytes 38 and 39 span the row number and entropy data (not independent
+segment/flag fields). The inspector labels byte 38 as raw data and anchors the
+14-bit 0x21 terminator to final zero bits and FF padding, since that pattern
+also occurs inside entropy. Ordered row marker matches can still be ambiguous.
 
 ## Video path (recovered syntax)
 
@@ -103,15 +102,8 @@ Raw framebuffer dumps and framebuffer CRCs use four little-endian bytes per
 pixel (B, G, R, 0), totaling 307,200 bytes for 320×240. Save-state version 2
 stores this format; version 1 RGB555 states are rejected before loading.
 
-The earlier 26-row assumption merged rows 26 and 27. Counting 186 literal
-EOBs was also insufficient because full blocks omit EOB. The native path
-validates coefficient bounds and the next marker at the exact consumed bit
-position; it does not search ahead to hide entropy errors.
-An independent survey of 35 data-track discs found the expected initial packet
-prefix in all 900,268 assembled video packets; it did not validate picture decode.
-The old 192×144 preview is retained for the parameter-sweep research tool via
-`CodecParams::legacy_preview`. Its bit-order and AC options do not affect
-native playback.
+The native path validates coefficient bounds and the next marker at the exact
+consumed bit position; it does not search ahead to hide entropy errors.
 
 ## Memory map (LLE / hardware access dump)
 
@@ -134,6 +126,6 @@ Mode 2 sectors:
 - channel 0 + submode bit3 `0x08` → data markers in payload[0]:
   - `0xF1` video fragment
   - `0xF2` frame end (submode bit0 clear) or interactive command (bit0 set)
-  - `0xF3` FF-filled padding (other forms retain legacy reset handling)
+  - `0xF3` FF-filled padding (other forms currently reset pending video)
 
 PID/subheader conventions seen on real discs: `0x61` video, `0x62` audio.

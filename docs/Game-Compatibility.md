@@ -11,7 +11,7 @@ checks, and structural entropy validation — not full playthroughs.
 | HLE player integration checks (load + stream + video + audio) | 2 |
 | Native entropy validation across complete disc streams | 37 |
 
-## Batch screenshots (2026-09-16)
+## Batch screenshots
 
 All 37 Redump ZIP titles completed `scripts/batch-screenshots.ps1` against the
 release `playdia-emu` binary and wrote a non-blank PNG under `docs/images/`.
@@ -28,6 +28,8 @@ playthrough, or hardware pixel accuracy. Two titles additionally have deeper
 HLE player integration checks: Mari-nee no Heya (native title/button screen;
 load, stream, video, audio) and Sample Soft (native menu and demo imagery;
 load, stream, video, audio).
+
+Last published capture run: 2026-09-16.
 
 ## Game List
 
@@ -81,7 +83,7 @@ Legend:
 
 ## How to update
 
-Regenerate the published matrix (ZIPs in place; private path is not committed):
+Regenerate the published matrix (ZIPs in place; disc paths are not committed):
 
 ```powershell
 .\scripts\batch-screenshots.ps1 -RedumpDir <local-redump-folder>
@@ -114,7 +116,7 @@ Record:
   Dragon Ball Z and Mari-nee pictures are recognizable; this does not establish
   hardware pixel accuracy or full game compatibility. Use `playdia-frame
   --check-all` to measure entropy coverage separately from navigation.
-- F2 jump and button-choice navigation is exercised on a private disc; timeout,
+- F2 jump and button-choice navigation is exercised on local discs; timeout,
   quiz, and score semantics have not been verified on hardware.
 - Prefer `--release` builds for any visual check.
 - Do not commit discs, BIOS, or PPM dumps. Screenshots under `docs/images/`
