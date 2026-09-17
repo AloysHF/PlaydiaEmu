@@ -18,13 +18,8 @@ the full 37-disc pass.
 
 ## Reproduction
 
-Extract a local disc archive and run:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-```
-
+Extract a local disc archive and run `playdia-frame --check-all` (optional
+`--packet` PPM export). Commands and flags: [Tools](Tools.md#playdia-frame).
 Raw MODE2/2352 BIN tracks are also accepted. Packet indices are one-based and
 include interactive F2 pictures. The command does not follow scene navigation.
 ZIP archives can be validated via a local adapter that streams into the same

@@ -31,15 +31,12 @@ fixed-point inverse DCT, then YCbCr. The patent’s figure 4 supports the
 factor/64 lead. Nonlinear dequantization, exact hardware transform, and color
 rounding still need comparison with trustworthy captures or chip logic.
 
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --packet 523 --output scene.ppm
-cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-all
-```
-
-The frame tool exports 248×216 RGB888 pixels. Playback centers them in
-320×240 XRGB8888 and only presents a picture after all rows and padding
-validate. RGB888 is the software reconstruction format, not a verified
-hardware precision claim. Decode failures retain the last complete picture.
+Reproduce with `playdia-frame` (`--packet` / `--check-all`); flags and full
+commands: [Tools](Tools.md#playdia-frame). The frame tool exports 248×216
+RGB888 pixels. Playback centers them in 320×240 XRGB8888 and only presents a
+picture after all rows and padding validate. RGB888 is the software
+reconstruction format, not a verified hardware precision claim. Decode
+failures retain the last complete picture.
 
 Synthetic tests cover macroblock prediction, signed escapes, implicit block
 ends, truncated packets, coefficient overflow, video in interactive F2 tails,
@@ -86,10 +83,8 @@ after every row marker.
 
 ## Inspection helpers
 
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- path\to\game.cue --video-rows
-```
-
-Core and inspector share fragment slicing and padding recognition. Tests cover
-F2 continuation, interleaved F3 padding, accumulator overflow, unaligned row
-markers, false terminators, and ambiguous row sequences.
+Row-marker and packet scans: `playdia-inspect --video-rows` (see
+[Tools](Tools.md#playdia-inspect)). Core and inspector share fragment slicing
+and padding recognition. Tests cover F2 continuation, interleaved F3 padding,
+accumulator overflow, unaligned row markers, false terminators, and ambiguous
+row sequences.

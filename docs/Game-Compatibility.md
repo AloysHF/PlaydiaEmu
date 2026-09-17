@@ -83,25 +83,9 @@ Legend:
 
 ## How to update
 
-Regenerate the published matrix (ZIPs in place; disc paths are not committed):
-
-```powershell
-.\scripts\batch-screenshots.ps1 -RedumpDir <local-redump-folder>
-```
-
-Inspect a title:
-
-```powershell
-cargo run --release -p playdiaemu-tools --bin playdia-inspect -- "path/to/title.cue"
-```
-
-Play headlessly and dump a frame:
-
-```powershell
-cargo run --release -p playdiaemu -- `
-  "path/to/title.cue" `
-  --headless --frames 120
-```
+Regenerate the published matrix with `scripts/batch-screenshots.ps1`
+(`-RedumpDir`; disc paths are not committed). Inspect and headless check
+commands: [Tools](Tools.md).
 
 Record:
 
