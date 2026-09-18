@@ -226,12 +226,11 @@ fn b_choices_reach_complete_pictures_without_replaying_the_prompt() {
         assert!(player.is_waiting_for_input());
         assert_ne!(player.frame_crc(), title_crc);
         let menu_crc = player.frame_crc();
-        player.set_input(b);
+        // Level-triggered selection: release so the open menu is not auto-advanced.
+        player.set_input(InputButtons::default());
         player.run_frame();
         assert_eq!(player.frame_crc(), menu_crc);
         assert_eq!(player.interactive.len(), 2);
-        player.set_input(InputButtons::default());
-        player.run_frame();
         player.set_input(b);
         assert_eq!(player.run_frame(), PlayerStop::Ok);
         assert_eq!(player.interactive.last().unwrap().0, 81);
@@ -287,6 +286,28 @@ fn choice_times_out_to_default_destination() {
     assert!(!player.is_waiting_for_input());
     // Default timeout target is destinations[0] (S=4 F=6 → LBA 180 → index 170 + 8).
     assert_eq!(player.track_index, 178);
+}
+
+#[test]
+fn choice_held_before_menu_still_selects() {
+    let mut player = DiscPlayer::new();
+    player.disc = Some(interactive_disc(0x44));
+    // Player is already holding A when the prompt opens.
+    player.set_input(InputButtons {
+        a: true,
+        ..Default::default()
+    });
+    player.run_frame();
+    assert!(player.is_waiting_for_input());
+    player.set_input(InputButtons {
+        a: true,
+        ..Default::default()
+    });
+    player.run_frame();
+    assert!(
+        !player.is_waiting_for_input(),
+        "held A (slot 5) must select without a new edge"
+    );
 }
 
 #[test]

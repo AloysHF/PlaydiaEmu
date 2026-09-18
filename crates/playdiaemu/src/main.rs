@@ -123,11 +123,21 @@ fn run_hle_headless(
         }
     }
     let mut dumped = 0u32;
+    // Hold each injected press for a few host frames so a press that lands on
+    // the same frame a menu opens still counts while waiting for input.
+    const PRESS_HOLD_FRAMES: u32 = 5;
     for i in 0..frames {
         let mut held = InputButtons::default();
         for &(at, buttons) in press_at {
-            if at == i {
-                held = buttons;
+            if i >= at && i < at + PRESS_HOLD_FRAMES {
+                held.up |= buttons.up;
+                held.down |= buttons.down;
+                held.left |= buttons.left;
+                held.right |= buttons.right;
+                held.a |= buttons.a;
+                held.b |= buttons.b;
+                held.start |= buttons.start;
+                held.select |= buttons.select;
             }
         }
         p.set_input(held);

@@ -89,8 +89,9 @@ the RetroArch log.
 | X / Y | Unused |
 
 At interactive F2 choice screens destinations use the reference button slots:
-Start, Up, Down, Left, Right, A, B. Choices also time out (~10 s) to the
-F2 80 timeout destination, or slot 1 (Start/default) when no timeout is set.
+Start, Up, Down, Left, Right, A, B. The held RetroPad state is polled while
+waiting (not only the press edge). Choices also time out (~10 s) to the F2 80
+timeout destination, or slot 1 (Start/default) when no timeout is set.
 
 ## Timing
 

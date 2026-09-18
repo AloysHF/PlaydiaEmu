@@ -27,7 +27,7 @@ ships an SH-1 LLE shell for future firmware experiments.
 Research-grade but usable for disc playback:
 
 - **HLE disc player (recommended)** — dual-track MODE2 CUE/BIN streaming, F1/F2/F3 video markers, XA ADPCM audio
-- **Interactive stream control** — finish embedded video before F2 jumps or button choices; choices time out to an F2 80 fallback (or the default slot) after ~10 s
+- **Interactive stream control** — finish embedded video before F2 jumps or button choices; held buttons select immediately, choices time out to an F2 80 fallback (or the default slot) after ~10 s
 - **Video** — recovered AK8000 row/VLC decoding produces recognizable 248×216 game pictures in a 320×240 XRGB8888 framebuffer (eight bits per color channel); hardware pixel accuracy remains unverified
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **SH-1 LLE shell** — interpreter subset + proven memory map; retail boot needs a user-supplied 512 KiB BIOS at `0xE0000000`

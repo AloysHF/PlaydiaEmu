@@ -111,27 +111,42 @@ impl DiscPlayer {
 
     pub fn run_frame(&mut self) -> PlayerStop {
         if self.waiting.is_some() {
-            let mut target = None;
-            if let Some(button) = pressed_choice(self.input.pressed) {
+            // Level-triggered while waiting: a button already held when the menu
+            // opens must still select (matching the interactive controller poll).
+            let mut seek_result: Option<bool> = None;
+            if let Some(button) = choice_slot(self.input.held) {
                 if let Some(destinations) = self.waiting {
-                    target = destinations[button];
+                    if let Some(target) = destinations[button] {
+                        seek_result = Some(self.seek_lba(target));
+                        if seek_result == Some(true) {
+                            self.waiting = None;
+                            self.wait_frames = 0;
+                        }
+                    }
                 }
             }
-            if target.is_none() {
+            // Count timeout whenever still waiting (including failed seeks).
+            if self.waiting.is_some() && seek_result != Some(true) {
                 self.wait_frames += 1;
                 if self.wait_frames >= CHOICE_TIMEOUT_FRAMES {
-                    target = self.timeout_choice_target();
-                    log::info!(
-                        "F2 choice timeout after {} frames → {:?}",
-                        self.wait_frames,
-                        target
-                    );
-                }
-            }
-            if let Some(target) = target {
-                if self.seek_lba(target) {
-                    self.waiting = None;
-                    self.wait_frames = 0;
+                    if let Some(target) = self.timeout_choice_target() {
+                        log::info!(
+                            "F2 choice timeout after {} frames → {}",
+                            self.wait_frames,
+                            target
+                        );
+                        if self.seek_lba(target) {
+                            self.waiting = None;
+                            self.wait_frames = 0;
+                        }
+                    } else {
+                        log::warn!(
+                            "F2 choice timeout has no valid target after {} frames",
+                            self.wait_frames
+                        );
+                        // Keep counting; retry once a target becomes valid.
+                        self.wait_frames = CHOICE_TIMEOUT_FRAMES;
+                    }
                 }
             }
             if self.waiting.is_some() {
@@ -351,7 +366,8 @@ impl DiscPlayer {
                     return false;
                 };
                 self.resume_after(lba);
-                if target <= lba && self.input.pressed != InputButtons::default() {
+                // Backward jumps loop until any held button breaks out.
+                if target <= lba && self.input.held != InputButtons::default() {
                     self.video.discard_pending();
                     return true;
                 }
@@ -673,9 +689,8 @@ fn command_address_to_lba(address: &[u8]) -> Option<u32> {
         .checked_sub(150)
 }
 
-fn pressed_choice(buttons: InputButtons) -> Option<usize> {
-    // Reference interactive slots: B1=Start/default, B2=Up, B3=Down,
-    // B4=Left, B5=Right, B6=A, B7=B.
+fn choice_slot(buttons: InputButtons) -> Option<usize> {
+    // B1=Start/default, B2=Up, B3=Down, B4=Left, B5=Right, B6=A, B7=B.
     if buttons.start {
         Some(0)
     } else if buttons.up {

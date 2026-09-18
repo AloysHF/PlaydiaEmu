@@ -66,9 +66,11 @@ known scene jumps and button choices within the stream track: `0x44`/`0x50`
 wait for input (or ~10 s timeout), `0x80` only records a timeout fallback LBA,
 and other command effects remain under investigation.
 
-Button slots for choices: Start, Up, Down, Left, Right, A, B. On timeout the
-player seeks to the last `0x80` destination when present, otherwise slot 1
-(Start/default).
+Button slots for choices: Start, Up, Down, Left, Right, A, B. Selection is
+level-triggered on the held pad state (a button already held when the menu
+opens still counts). On timeout the player seeks to the last `0x80`
+destination when present, otherwise slot 1 (Start/default). Backward scene
+loops keep playing until any held button breaks out.
 Interactive F2 sectors also carry video tails. The HLE player finishes and
 presents the latest queued preview before handling the control command, so
 waiting for input does not freeze on an earlier queued picture.
