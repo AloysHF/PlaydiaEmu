@@ -56,11 +56,15 @@ cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 | `--screenshot-frames N` | `30` | Frames before the screenshot (overrides `--frames` when `-S` is set) |
 | `--dump-every N` | — | Periodic PPM dumps every N decoded frames |
 | `--dump-dir DIR` | `tmp/out` | Directory for periodic dumps |
-| `--press-at FRAME:BUTTON` | — | Inject a one-frame press; repeat for multiple inputs. Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start` |
+| `--press-at FRAME:BUTTON` | — | Hold a button for a few frames starting at FRAME; repeat for multiple inputs. Buttons: `up`, `down`, `left`, `right`, `a`, `b`, `start` |
 
 The HLE player follows F2 scene jumps and pauses at F2 button choices until a
-mapped button is pressed. CUE/BIN images provide the full-disc addresses needed
-for these jumps. Timeout, score, and quiz behavior is still incomplete.
+mapped button is held. Selection uses the held state (not only the press edge),
+so holding a key through a menu that just opened still works. Choices time out
+after about 10 seconds to the F2 80 timeout destination, or the Start/default
+slot when none is set. `--press-at FRAME:BUTTON` keeps the button held for a
+few frames after FRAME. CUE/BIN images provide the full-disc addresses needed
+for these jumps. Quiz/score semantics beyond timeout are still incomplete.
 The default decoder reconstructs 248×216 game pictures centered in the 320×240
 XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 27 rows before presenting a picture. Unknown
 codes or damaged packets retain the previous frame. Rare VLC entries and
