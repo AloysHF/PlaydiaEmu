@@ -21,9 +21,6 @@ pub struct AudioDecoder {
     pub bytes: u64,
     pub prev: [i32; 2],
     pub prev2: [i32; 2],
-    /// Unit test tone: ignore bitstream, emit a quiet stereo sine.
-    pub test_tone: bool,
-    tone_phase: f32,
 }
 
 impl AudioDecoder {
@@ -32,11 +29,7 @@ impl AudioDecoder {
     }
 
     pub fn reset(&mut self) {
-        let test_tone = self.test_tone;
-        *self = Self {
-            test_tone,
-            ..Self::default()
-        };
+        *self = Self::default();
     }
 
     pub fn ingest(&mut self, packet: &XaPacket) {
@@ -44,24 +37,8 @@ impl AudioDecoder {
             return;
         };
         self.bytes += data.len() as u64;
-        if self.test_tone {
-            self.emit_test_tone(SAMPLES_PER_UNIT * 2);
-            self.blocks += 1;
-            return;
-        }
         self.decode_sector(data, *coding);
         self.blocks += 1;
-    }
-
-    fn emit_test_tone(&mut self, n: usize) {
-        for i in 0..n {
-            let t = self.tone_phase + i as f32;
-            let v = (t * 2.0 * std::f32::consts::PI * 440.0 / OUT_RATE as f32).sin();
-            let s = (v * 3000.0) as i16;
-            self.pcm.push(s);
-            self.pcm.push(s);
-        }
-        self.tone_phase += n as f32;
     }
 
     fn decode_sector(&mut self, sector_data: &[u8], coding: u8) {
@@ -168,7 +145,6 @@ impl AudioDecoder {
             out.extend_from_slice(&self.prev[i].to_le_bytes());
             out.extend_from_slice(&self.prev2[i].to_le_bytes());
         }
-        out.extend_from_slice(&self.tone_phase.to_le_bytes());
         out.extend_from_slice(&(self.pcm.len() as u32).to_le_bytes());
         for s in &self.pcm {
             out.extend_from_slice(&s.to_le_bytes());
@@ -192,7 +168,6 @@ impl AudioDecoder {
             self.prev[i] = i32::from_le_bytes(take(o, 4)?.try_into().unwrap());
             self.prev2[i] = i32::from_le_bytes(take(o, 4)?.try_into().unwrap());
         }
-        self.tone_phase = f32::from_le_bytes(take(o, 4)?.try_into().unwrap());
         let n = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
         self.pcm = Vec::with_capacity(n);
         for _ in 0..n {

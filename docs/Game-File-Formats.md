@@ -107,24 +107,11 @@ words in `0x00RRGGBB` order. This software output format does not establish
 the original hardware color precision.
 
 Raw framebuffer dumps and framebuffer CRCs use four little-endian bytes per
-pixel (B, G, R, 0), totaling 307,200 bytes for 320×240. Save-state version 2
-stores this format; version 1 RGB555 states are rejected before loading.
+pixel (B, G, R, 0), totaling 307,200 bytes for 320×240. Save-state version 4
+stores the complete HLE playback state; older versions are rejected.
 
 The native path validates coefficient bounds and the next marker at the exact
 consumed bit position; it does not search ahead to hide entropy errors.
-
-## Memory map (LLE / hardware access dump)
-
-| Base | Size | Region |
-|------|------|--------|
-| 0x000F0000 | 0x100 | CDXA shared window |
-| 0x00100000 | 384 KiB | CDXA stream DRAM |
-| 0x00180000 | 96 KiB | CDXA VRAM |
-| 0x00200000 | 512 KiB | CDXA work DRAM |
-| 0x007FFC00 | 1 KiB | SH1 internal RAM |
-| 0xE0000000 | 512 KiB | Main EPROM (BIOS) |
-
-Retail LLE boot needs a user-supplied 512 KiB BIOS at `0xE0000000`.
 
 ## CDS-XA routing summary
 

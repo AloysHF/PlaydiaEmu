@@ -74,7 +74,6 @@ impl DiscPlayer {
         let disc = DiscImage::from_path(path)?;
         self.identity.disc_crc = disc.crc;
         self.identity.disc_sectors = disc.total_sectors;
-        self.identity.bios_crc = None;
         self.disc = Some(disc);
         self.reset();
         Ok(())
@@ -84,7 +83,6 @@ impl DiscPlayer {
         let disc = DiscImage::from_bytes(bytes)?;
         self.identity.disc_crc = disc.crc;
         self.identity.disc_sectors = disc.total_sectors;
-        self.identity.bios_crc = None;
         self.disc = Some(disc);
         self.reset();
         Ok(())

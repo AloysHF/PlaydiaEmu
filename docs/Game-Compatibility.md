@@ -104,5 +104,5 @@ Record:
   prompts time out (~10 s) to the F2 80 fallback or the default slot; quiz and
   score semantics beyond timeout have not been verified on hardware.
 - Prefer `--release` builds for any visual check.
-- Do not commit discs, BIOS, or PPM dumps. Screenshots under `docs/images/`
+- Do not commit discs or PPM dumps. Screenshots under `docs/images/`
   are PNG previews only.
