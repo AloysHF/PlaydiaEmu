@@ -108,6 +108,44 @@ fn interactive_disc(command: u8) -> DiscImage {
     }
 }
 
+fn noninteractive_stream_disc() -> DiscImage {
+    let mut disc = interactive_disc(0x44);
+    disc.tracks[1].data[2352 + 24] = 0;
+    disc
+}
+
+#[test]
+fn player_advances_75_cd_sectors_per_second() {
+    let mut player = DiscPlayer::new();
+    player.disc = Some(noninteractive_stream_disc());
+
+    for expected in [2, 5, 7, 10] {
+        assert_eq!(player.run_frame(), PlayerStop::Ok);
+        assert_eq!(player.track_index, expected);
+    }
+    for _ in 4..30 {
+        assert_eq!(player.run_frame(), PlayerStop::Ok);
+    }
+
+    assert_eq!(player.track_index, 75);
+}
+
+#[test]
+fn save_state_preserves_cd_sector_phase() {
+    let disc = noninteractive_stream_disc();
+    let mut first = DiscPlayer::new();
+    first.disc = Some(disc.clone());
+    assert_eq!(first.run_frame(), PlayerStop::Ok);
+    assert_eq!(first.track_index, 2);
+
+    let state = first.save_state();
+    let mut restored = DiscPlayer::new();
+    restored.disc = Some(disc);
+    restored.load_state(&state).unwrap();
+    assert_eq!(restored.run_frame(), PlayerStop::Ok);
+    assert_eq!(restored.track_index, 5);
+}
+
 #[test]
 fn interactive_jump_uses_disc_lba_and_discards_prefetch() {
     let mut player = DiscPlayer::new();
@@ -115,10 +153,10 @@ fn interactive_jump_uses_disc_lba_and_discards_prefetch() {
     assert_eq!(player.run_frame(), PlayerStop::Ok);
     assert_eq!(player.interactive[0].0, 11);
     assert_eq!(player.demux.interactive_cmds, 1);
-    // destinations[0] uses S=4 F=6 鈫?LBA 180; track_index = 180 - base(10) = 170.
+    // destinations[0] uses S=4 F=6 -> LBA 180; track_index = 180 - base(10) = 170.
     assert_eq!(player.track_index, 170);
     assert_eq!(player.run_frame(), PlayerStop::Ok);
-    assert_eq!(player.track_index, 178);
+    assert_eq!(player.track_index, 173);
 }
 
 #[test]
@@ -137,7 +175,7 @@ fn interactive_choice_pauses_and_seeks_on_button_edge() {
     });
     player.run_frame();
     assert!(!player.is_waiting_for_input());
-    assert_eq!(player.track_index, 178);
+    assert_eq!(player.track_index, 173);
 }
 
 #[test]
@@ -268,7 +306,7 @@ fn horizontal_choices_use_reference_button_slots() {
         player.run_frame();
         player.set_input(buttons);
         player.run_frame();
-        assert_eq!(player.track_index, 160 + slot * 5 + 8);
+        assert_eq!(player.track_index, 160 + slot * 5 + 3);
         assert!(!player.is_waiting_for_input());
     }
 }
@@ -284,8 +322,8 @@ fn choice_times_out_to_default_destination() {
         player.run_frame();
     }
     assert!(!player.is_waiting_for_input());
-    // Default timeout target is destinations[0] (S=4 F=6 → LBA 180 → index 170 + 8).
-    assert_eq!(player.track_index, 178);
+    // Default timeout target is destinations[0] (S=4 F=6 → LBA 180 → index 170 + 3).
+    assert_eq!(player.track_index, 173);
 }
 
 #[test]
@@ -342,8 +380,8 @@ fn f2_80_timeout_destination_is_used_before_default() {
         player.run_frame();
     }
     assert!(!player.is_waiting_for_input());
-    // Timeout dest S=4 F=4 → LBA 170 → track 160 + 8 = 168 (not default 178).
-    assert_eq!(player.track_index, 168);
+    // Timeout dest S=4 F=4 → LBA 170 → track 160 + 2 = 162 (not default 172).
+    assert_eq!(player.track_index, 162);
 }
 
 #[test]

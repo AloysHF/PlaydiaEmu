@@ -11,9 +11,9 @@ use crate::state::{crc32, decode_state, encode_state, ContentIdentity, SaveState
 use crate::video::VideoDecoder;
 use crate::{FB_HEIGHT, FB_WIDTH};
 
-/// Realtime-ish pacing: ~3 frames of 12282-byte video ≈ 6 F1 + audio interleaving.
-/// From Mari-nee: ~8 video slots + occasional audio every ~16 sectors.
-const SECTORS_PER_FRAME: u32 = 8;
+/// CD-ROM sectors are clocked at 75 Hz. At the 30 Hz host rate, alternating
+/// between two and three sectors keeps disc, video, and XA audio time aligned.
+const SECTORS_PER_FRAME_BASE: u32 = 2;
 
 /// Host frames to wait at F2 choice/quiz prompts before applying timeout.
 /// Matches the ~10 s default used by the reference interactive handler.
@@ -37,6 +37,7 @@ pub struct DiscPlayer {
     pub frame: u64,
     pub sector_cursor: u32,
     pub track_index: u32,
+    sector_phase: u8,
     pub interactive: Vec<(u32, Vec<u8>)>,
     pub pcm: Vec<i16>,
     waiting: Option<[Option<u32>; 7]>,
@@ -62,6 +63,7 @@ impl DiscPlayer {
             frame: 0,
             sector_cursor: 0,
             track_index: 0,
+            sector_phase: 0,
             interactive: Vec::new(),
             pcm: Vec::new(),
             waiting: None,
@@ -96,6 +98,7 @@ impl DiscPlayer {
         self.frame = 0;
         self.sector_cursor = 0;
         self.track_index = 0;
+        self.sector_phase = 0;
         self.interactive.clear();
         self.pcm.clear();
         self.waiting = None;
@@ -153,7 +156,10 @@ impl DiscPlayer {
                 return PlayerStop::Ok;
             }
         }
-        // Collect raw sectors first to avoid borrow conflicts.
+        // Collect raw sectors first to avoid borrow conflicts. The alternating
+        // 2/3 cadence advances exactly 75 sectors over 30 active host frames.
+        let sectors_this_frame = SECTORS_PER_FRAME_BASE + u32::from(self.sector_phase);
+        self.sector_phase ^= 1;
         let mut batch: Vec<(u32, Vec<u8>)> = Vec::new();
         let mut single_mode = false;
         {
@@ -183,7 +189,7 @@ impl DiscPlayer {
                         }
                     }
                 }
-                for _ in 0..SECTORS_PER_FRAME {
+                for _ in 0..sectors_this_frame {
                     if self.track_index >= track.sectors {
                         self.demux.end_flag = true;
                         break;
@@ -197,7 +203,7 @@ impl DiscPlayer {
             } else {
                 single_mode = true;
                 let total = disc.total_sectors;
-                for _ in 0..SECTORS_PER_FRAME {
+                for _ in 0..sectors_this_frame {
                     if self.sector_cursor >= total {
                         self.demux.end_flag = true;
                         break;
@@ -524,6 +530,7 @@ impl DiscPlayer {
         p.extend_from_slice(&self.frame.to_le_bytes());
         p.extend_from_slice(&self.sector_cursor.to_le_bytes());
         p.extend_from_slice(&self.track_index.to_le_bytes());
+        p.push(self.sector_phase);
         match self.waiting {
             Some(dest) => {
                 p.push(1);
@@ -588,6 +595,10 @@ impl DiscPlayer {
         self.frame = u64::from_le_bytes(take(&mut o, 8)?.try_into().unwrap());
         self.sector_cursor = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap());
         self.track_index = u32::from_le_bytes(take(&mut o, 4)?.try_into().unwrap());
+        self.sector_phase = take(&mut o, 1)?[0];
+        if self.sector_phase > 1 {
+            return Err(SaveStateError::Truncated);
+        }
         self.waiting = if take(&mut o, 1)?[0] == 0 {
             None
         } else {
