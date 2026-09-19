@@ -8,7 +8,8 @@ pub const STATE_MAGIC: &[u8; 8] = b"PLAYDIA1";
 // Version 3 adds F2 choice wait frames and timeout destination after the waiting block.
 // Version 4 removes the unused firmware identity field.
 // Version 5 stores the fractional CD sector pacing phase.
-pub const STATE_VERSION: u16 = 5;
+// Version 6 stores the native 248x216 framebuffer without presentation borders.
+pub const STATE_VERSION: u16 = 6;
 
 #[derive(Debug, Error)]
 pub enum SaveStateError {

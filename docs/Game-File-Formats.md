@@ -88,8 +88,9 @@ also occurs inside entropy. Ordered row marker matches can still be ambiguous.
 
 ## Video path (recovered syntax)
 
-The default decoder reads one 248×216 picture per assembled packet and centers
-it in the 320×240 XRGB8888 framebuffer. Each of 27 rows contains 31 macroblocks
+The default decoder reads one 248×216 picture per assembled packet into a
+matching XRGB8888 framebuffer. Frontends present it at the provisional 4:3
+display aspect. Each of 27 rows contains 31 macroblocks
 of four luma and two chroma 4×4 blocks. Entropy uses signed run/level VLCs,
 `01` EOB and a six-bit `001000` escape with four run bits and ten signed level
 bits. A block filled through coefficient 15 ends without another EOB.
@@ -107,7 +108,7 @@ words in `0x00RRGGBB` order. This software output format does not establish
 the original hardware color precision.
 
 Raw framebuffer dumps and framebuffer CRCs use four little-endian bytes per
-pixel (B, G, R, 0), totaling 307,200 bytes for 320×240. Save-state version 4
+pixel (B, G, R, 0), totaling 214,272 bytes for 248×216. Save-state version 6
 stores the complete HLE playback state; older versions are rejected.
 
 The native path validates coefficient bounds and the next marker at the exact

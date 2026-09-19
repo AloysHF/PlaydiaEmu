@@ -17,6 +17,6 @@ pub use input::{InputButtons, InputState};
 pub use player::{DiscPlayer, PlayerStop};
 pub use state::{SaveStateError, STATE_MAGIC, STATE_VERSION};
 
-/// Native framebuffer geometry produced by the core.
-pub const FB_WIDTH: usize = 320;
-pub const FB_HEIGHT: usize = 240;
+/// Native decoded framebuffer geometry produced by the core.
+pub const FB_WIDTH: usize = video::ak8000::WIDTH;
+pub const FB_HEIGHT: usize = video::ak8000::HEIGHT;

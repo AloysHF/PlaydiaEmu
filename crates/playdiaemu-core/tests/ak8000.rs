@@ -132,8 +132,8 @@ fn invalid_picture_preserves_the_last_presented_frame() {
     }
     assert_eq!((video.frames_decoded, video.frames_failed), (1, 1));
     assert!(!video.present_next());
-    assert_eq!(video.framebuffer[12 * 320 + 36], 0x0080_8080);
-    assert_eq!(video.framebuffer[0], 0);
+    assert_eq!(video.framebuffer.len(), WIDTH * HEIGHT);
+    assert_eq!(video.framebuffer[0], 0x0080_8080);
 }
 
 #[test]
@@ -183,16 +183,12 @@ fn playback_cache_and_ppm_preserve_export_colors() {
             data: vec![0xF2],
         });
         assert!(video.present_next());
-        for y in 0..240 {
-            for x in 0..320 {
-                let pixel = video.framebuffer[y * 320 + x];
-                if (36..284).contains(&x) && (12..228).contains(&y) {
-                    let i = ((y - 12) * WIDTH + x - 36) * 3;
-                    let (r, g, b) = playdiaemu_core::video::unpack_rgb888(pixel);
-                    assert_eq!(&[r, g, b], &exported[i..i + 3]);
-                } else {
-                    assert_eq!(pixel, 0);
-                }
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                let pixel = video.framebuffer[y * WIDTH + x];
+                let i = (y * WIDTH + x) * 3;
+                let (r, g, b) = playdiaemu_core::video::unpack_rgb888(pixel);
+                assert_eq!(&[r, g, b], &exported[i..i + 3]);
             }
         }
     }
@@ -201,17 +197,16 @@ fn playback_cache_and_ppm_preserve_export_colors() {
     video.dump_ppm(&path).unwrap();
     let ppm = std::fs::read(&path).unwrap();
     std::fs::remove_file(path).unwrap();
-    let header = b"P6\n320 240\n255\n";
+    let header = b"P6\n248 216\n255\n";
     assert!(ppm.starts_with(header));
-    assert_eq!(ppm.len(), header.len() + 320 * 240 * 3);
+    assert_eq!(ppm.len(), header.len() + WIDTH * HEIGHT * 3);
     for y in 0..HEIGHT {
-        let start = header.len() + ((y + 12) * 320 + 36) * 3;
+        let start = header.len() + y * WIDTH * 3;
         assert_eq!(
             &ppm[start..start + WIDTH * 3],
             &exported[y * WIDTH * 3..(y + 1) * WIDTH * 3]
         );
     }
     let raw = video.framebuffer_bytes();
-    let start = (12 * 320 + 36) * 4;
-    assert_eq!(&raw[start..start + 4], &[132, 130, 133, 0]);
+    assert_eq!(&raw[..4], &[132, 130, 133, 0]);
 }
