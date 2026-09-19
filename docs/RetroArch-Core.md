@@ -63,7 +63,7 @@ core metadata.
 - Performance level 4 (same as SPMP8000/Dingoo HLE shells)
 - Rust `log` messages forwarded to the RetroArch log interface
 - Host pacing at 30 fps (matches standalone HLE video slot rate)
-- Save states via libretro serialize / unserialize (version 2 envelope; disc CRC must match)
+- Save states via libretro serialize / unserialize (version 4 envelope; disc CRC must match)
 
 ## Core Options
 

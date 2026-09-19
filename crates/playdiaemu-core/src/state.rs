@@ -6,7 +6,8 @@ use thiserror::Error;
 pub const STATE_MAGIC: &[u8; 8] = b"PLAYDIA1";
 // Version 2 stores framebuffer pixels as little-endian XRGB8888 words.
 // Version 3 adds F2 choice wait frames and timeout destination after the waiting block.
-pub const STATE_VERSION: u16 = 3;
+// Version 4 removes the unused firmware identity field.
+pub const STATE_VERSION: u16 = 4;
 
 #[derive(Debug, Error)]
 pub enum SaveStateError {
@@ -24,56 +25,31 @@ pub enum SaveStateError {
     Truncated,
 }
 
-/// Immutable identity of loaded content + firmware.
+/// Immutable identity of loaded disc content.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ContentIdentity {
     pub disc_crc: u32,
-    pub bios_crc: Option<u32>,
     pub disc_sectors: u32,
 }
 
 impl ContentIdentity {
     pub fn encode(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.disc_crc.to_le_bytes());
-        match self.bios_crc {
-            Some(c) => {
-                out.push(1);
-                out.extend_from_slice(&c.to_le_bytes());
-            }
-            None => out.push(0),
-        }
         out.extend_from_slice(&self.disc_sectors.to_le_bytes());
     }
 
     pub fn decode(buf: &[u8]) -> Option<(Self, usize)> {
-        if buf.len() < 13 {
+        if buf.len() < 8 {
             return None;
         }
         let disc_crc = u32::from_le_bytes(buf[0..4].try_into().ok()?);
-        let has_bios = buf[4];
-        let mut o = 5;
-        let bios_crc = if has_bios == 1 {
-            if buf.len() < o + 4 {
-                return None;
-            }
-            let c = u32::from_le_bytes(buf[o..o + 4].try_into().ok()?);
-            o += 4;
-            Some(c)
-        } else {
-            None
-        };
-        if buf.len() < o + 4 {
-            return None;
-        }
-        let disc_sectors = u32::from_le_bytes(buf[o..o + 4].try_into().ok()?);
-        o += 4;
+        let disc_sectors = u32::from_le_bytes(buf[4..8].try_into().ok()?);
         Some((
             Self {
                 disc_crc,
-                bios_crc,
                 disc_sectors,
             },
-            o,
+            8,
         ))
     }
 }
@@ -101,7 +77,7 @@ pub fn encode_state(identity: &ContentIdentity, payload: &[u8]) -> Vec<u8> {
 }
 
 pub fn decode_state(buf: &[u8], expected: &ContentIdentity) -> Result<Vec<u8>, SaveStateError> {
-    if buf.len() < 8 + 2 + 13 + 4 + 4 {
+    if buf.len() < 8 + 2 + 8 + 4 + 4 {
         return Err(SaveStateError::TooSmall);
     }
     if &buf[0..8] != STATE_MAGIC {

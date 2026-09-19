@@ -21,7 +21,7 @@
 
 - **Game compatibility testing** — test more Redump titles and report issues with notes
 - **Video codec** — AK8000 VLC / AC tables still approximate; fixture-proven diffs welcome
-- **SH-1 LLE** — improve interpreter accuracy when a legal BIOS path is available
+- **HLE playback** — improve scene navigation, timing, and disc compatibility
 - **Platform ports** — macOS, Linux, Android, and iOS testing and packaging
 - **Documentation** — improve docs and code comments
 - **Bug reports** — if a disc doesn't play correctly, please open an issue
@@ -30,7 +30,7 @@
 ## Getting Started
 
 Prefer synthetic fixtures under `crates/playdiaemu-core/tests/` for regressions.
-Do not commit BIOS dumps, disc images, or extracted copyrighted assets.
+Do not commit disc images or extracted copyrighted assets.
 
 To understand the Playdia disc format (CDS-XA, F1/F2/F3 markers, XA ADPCM),
 see [Game File Formats](Game-File-Formats.md).

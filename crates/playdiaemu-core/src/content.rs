@@ -8,7 +8,6 @@ use thiserror::Error;
 
 pub const RAW_SECTOR: usize = 2352;
 pub const COOKED_SECTOR: usize = 2048;
-pub const BIOS_SIZE: usize = 0x8_0000;
 
 #[derive(Debug, Error)]
 pub enum LoadError {
@@ -18,8 +17,6 @@ pub enum LoadError {
     Empty,
     #[error("unsupported disc size {0}")]
     BadDiscSize(usize),
-    #[error("bios must be {BIOS_SIZE} bytes, got {0}")]
-    BadBiosSize(usize),
     #[error("cue parse: {0}")]
     Cue(String),
     #[error("missing bin for cue track: {0}")]
@@ -472,14 +469,4 @@ pub fn parse_raw_sector(raw: &[u8]) -> Option<Sector> {
         data,
         lba: 0,
     })
-}
-
-pub fn load_bios(bytes: &[u8], allow_placeholder: bool) -> Result<Vec<u8>, LoadError> {
-    if bytes.len() == BIOS_SIZE {
-        return Ok(bytes.to_vec());
-    }
-    if allow_placeholder && bytes.is_empty() {
-        return Ok(vec![0; BIOS_SIZE]);
-    }
-    Err(LoadError::BadBiosSize(bytes.len()))
 }
