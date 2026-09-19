@@ -1,8 +1,6 @@
 # AK8000 decoding research
 
-Current decoder model, evidence, and reproduction only. Superseded framing
-studies, sparse-probe tables, and intermediate recovery counts are local
-research notes (not in this repository).
+Current decoder model, validation status, evidence, and known limitations.
 
 ## Current decoder
 
@@ -44,20 +42,11 @@ ends, truncated packets, coefficient overflow, video in interactive F2 tails,
 cached presentation, PPM channel order, state version rejection, and libretro
 format negotiation. Proprietary pictures are not test fixtures.
 
-Full-disc native validation (regression tracks used during recovery):
-
-| Disc | Pictures | All rows, blocks and trailer valid |
-|---|---:|---:|
-| Mari-nee no Heya | 10,957 | 10,957 |
-| Yumi to Tokoton Playdia | 11,283 | 11,283 |
-
-A 180-host-frame Mari-nee run presents 103 pictures with zero failures and
-reaches the title/button-choice screen. Entropy coverage does not prove
-decoded pixel values.
-
 All 37 supplied archives: **1,135,531 of 1,135,539** pictures pass. The eight
-Aqua Adventure failures exhaust data in row 27 without a terminal marker;
-checked F2 EDCs match. See the [full corpus report](AK8000-Corpus-Validation.md).
+Aqua Adventure failures exhaust coefficient data in macroblock row 27. All
+48 affected F1/F2 sectors have correct EDC and ECC P/Q parity. The player
+retains the previous complete picture; actual AK8000 error concealment remains
+unverified. See the [full corpus report](AK8000-Corpus-Validation.md).
 
 ## Evidence and sources
 
@@ -76,6 +65,11 @@ number 1..26. It requires 186 block-end symbols per row and describes a
 Huffman ROM, nonlinear dequantization, prediction, and inverse Hadamard. The
 actual Huffman codebook is not given. Strong architectural lead, not proof of
 every AK8000 operation.
+
+Paragraph 0031 permits discarding a damaged picture, receiving it again, or
+stopping decompression. It provides an architectural precedent for picture
+rejection, but does not establish AK8000 display-buffer behavior or partial-row
+concealment.
 
 [pyplaydia revision 1611f64](https://github.com/larrykoubiak/pyplaydia/tree/1611f64)
 provided F2-tail and bit-field leads. Its notes include conflicting codec

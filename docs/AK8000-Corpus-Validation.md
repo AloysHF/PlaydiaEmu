@@ -20,11 +20,10 @@ the full 37-disc pass.
 
 Extract a local disc archive and run `playdia-frame --check-all` (optional
 `--packet` PPM export). Commands and flags: [Tools](Tools.md#playdia-frame).
-Raw MODE2/2352 BIN tracks are also accepted. Packet indices are one-based and
-include interactive F2 pictures. The command does not follow scene navigation.
-ZIP archives can be validated via a local adapter that streams into the same
-Rust validator; the CLI validates extracted tracks directly. No disc bytes or
-screenshots are distributed with these results.
+The CLI accepts ZIP archives, CUE images and raw MODE2/2352 BIN tracks.
+Packet indices are one-based and include interactive F2 pictures. The command
+does not follow scene navigation. No disc bytes or screenshots are distributed
+with these results.
 
 ## Results
 
@@ -71,12 +70,18 @@ screenshots are distributed with these results.
 ## Incomplete source packets
 
 Aqua Adventure packet indices 26562, 26563, 26564, 26565, 26599, 26648,
-26649 and 26656 fail in row 27. Each assembled packet uses all 12,248 bytes
-available from five F1 sectors and the F2 tail, without a terminal marker or
-FF padding. The checked F2 sectors for packets 26562 and 26563 have correct
-Mode2 Form1 EDCs, as does the preceding valid packet's F2 sector. This supports
-source video truncation rather than a read error in those sectors. The original
-encoding cause has not been established.
+26649 and 26656 exhaust their 12,248-byte payloads in macroblock row 27.
+The eight occurrences contain five distinct incomplete payloads, with 5 to 16
+blocks unfinished before the terminal marker. Each macroblock row spans eight
+image scanlines; at complete-macroblock granularity, the incomplete region is
+the bottom-right 8 to 24 pixels by 8 pixels.
 
-The current player preserves the previous complete picture. It does not invent
-missing coefficients. Hardware row-level error concealment remains unverified.
+All 48 affected F1/F2 sectors have correct Mode2 Form1 EDC and ECC P/Q parity,
+supporting source video truncation rather than random sector read corruption.
+All failed packets use factor 250, the highest observed on this disc. An
+encoder capacity limit is a plausible cause, but remains unproven.
+
+The player rejects incomplete packets, preserves the previous complete picture
+and resumes decoding at the next packet. It does not reconstruct missing
+coefficients or apply partial-picture concealment. Actual AK8000 error handling
+remains unverified and requires an aligned hardware capture or chip trace.
