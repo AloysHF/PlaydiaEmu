@@ -51,7 +51,7 @@ cargo run --release -p playdiaemu -- path\to\game.cue --headless --frames 180
 |---|---|---|
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
 | `--headless` | off | Run without opening a window |
-| `--frames N` | `180` | Host frames to run in headless mode (~8 stream sectors each) |
+| `--frames N` | `180` | Host frames to run in headless mode (30 frames advance 75 CD sectors) |
 | `-S, --screenshot PATH` | — | Take a screenshot after N frames and exit (PNG); implies headless |
 | `--screenshot-frames N` | `30` | Frames before the screenshot (overrides `--frames` when `-S` is set) |
 | `--dump-every N` | — | Periodic PPM dumps every N decoded frames |
