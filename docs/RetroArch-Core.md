@@ -56,14 +56,14 @@ core metadata.
 ## Supported Features
 
 - HLE disc player (`DiscPlayer`) aligned with the standalone emulator
-- Video output using XRGB8888 (320×240, eight bits per channel, 1,280-byte row pitch)
+- Video output using XRGB8888 (248×216, eight bits per channel, 992-byte row pitch)
 - Stereo audio output at 44100 Hz
 - RetroPad input handling (including interactive F2 choice mapping)
 - Input descriptors for the frontend key-remap UI
 - Performance level 4 (same as SPMP8000/Dingoo HLE shells)
 - Rust `log` messages forwarded to the RetroArch log interface
 - Host pacing at 30 fps (matches standalone HLE video slot rate)
-- Save states via libretro serialize / unserialize (version 4 envelope; disc CRC must match)
+- Save states via libretro serialize / unserialize (version 6 envelope; disc CRC must match)
 
 ## Core Options
 
@@ -97,7 +97,7 @@ timeout destination, or slot 1 (Start/default) when no timeout is set.
 
 | Field | Value |
 |-------|-------|
-| Base resolution | 320×240 |
+| Base resolution | 248×216 |
 | Aspect ratio | 4:3 |
 | Frame rate | 30 fps (HLE host frames; matches standalone) |
 | Sample rate | 44100 Hz |

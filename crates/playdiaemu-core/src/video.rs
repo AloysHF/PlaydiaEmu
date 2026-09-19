@@ -11,8 +11,8 @@ pub mod ak8000;
 pub mod structure;
 use structure::{video_fragment, VIDEO_PACKET_CAP};
 
-pub const WIDTH: usize = 320;
-pub const HEIGHT: usize = 240;
+pub const WIDTH: usize = ak8000::WIDTH;
+pub const HEIGHT: usize = ak8000::HEIGHT;
 pub const ENC_W: usize = 192;
 pub const ENC_H: usize = 144;
 
@@ -302,6 +302,9 @@ impl VideoDecoder {
             self.pending.push_back(take(o, n)?.to_vec());
         }
         let fb_words = u32::from_le_bytes(take(o, 4)?.try_into().unwrap()) as usize;
+        if fb_words != WIDTH * HEIGHT {
+            return Err(SaveStateError::Truncated);
+        }
         self.framebuffer = Vec::with_capacity(fb_words);
         for _ in 0..fb_words {
             self.framebuffer

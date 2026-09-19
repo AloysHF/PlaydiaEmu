@@ -1,7 +1,7 @@
 //! Pure HLE disc player (no BIOS / no main CPU required).
 //!
 //! Streams Track 2 of a MODE2 CUE, routes F1/F2/F3 video and XA audio,
-//! and produces a 320×240 XRGB8888 framebuffer + stereo PCM.
+//! and produces a native 248×216 XRGB8888 framebuffer + stereo PCM.
 
 use crate::audio::AudioDecoder;
 use crate::cd::{XaDemux, XaPacket};

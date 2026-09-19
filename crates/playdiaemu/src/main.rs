@@ -15,6 +15,9 @@ mod keyboard;
 use gamepad::GamepadMapper;
 use keyboard::{KeyboardMapper, RemapSpec};
 
+const DISPLAY_HEIGHT: usize = FB_HEIGHT;
+const DISPLAY_WIDTH: usize = DISPLAY_HEIGHT * 4 / 3;
+
 #[derive(Parser)]
 #[command(
     name = "playdia-emu",
@@ -24,7 +27,7 @@ use keyboard::{KeyboardMapper, RemapSpec};
 struct Cli {
     /// Path to .cue / .zip (preferred) or raw .bin/.iso
     disc: Option<PathBuf>,
-    /// Window scale factor (native is 320x240)
+    /// Window scale factor (4:3 presentation is 288x216)
     #[arg(
         short,
         long,
@@ -193,7 +196,7 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
     let (window_width, window_height) = if cli.fullscreen {
         screen_size()
     } else {
-        (FB_WIDTH * scale, FB_HEIGHT * scale)
+        (DISPLAY_WIDTH * scale, DISPLAY_HEIGHT * scale)
     };
     let mut window = minifb::Window::new(
         "PlaydiaEmu",
@@ -241,20 +244,19 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
     let keyboard = KeyboardMapper::new(&cli.remappings, cli.swap_ab);
     let mut gamepad = GamepadMapper::new(!cli.no_gamepad, cli.swap_ab);
     let mut frames = 0u32;
-    let mut overlay = player.framebuffer().to_vec();
+    let mut display = vec![0; DISPLAY_WIDTH * DISPLAY_HEIGHT];
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
         let t0 = Instant::now();
         let buttons = merge_buttons(keyboard.pressed_buttons(&window), gamepad.pressed_buttons());
         player.set_input(buttons);
         let stop = player.run_frame();
 
-        overlay.clear();
-        overlay.extend_from_slice(player.framebuffer());
+        scale_to_display(player.framebuffer(), &mut display);
         if cli.show_gamepad {
-            gamepad_overlay::draw(&mut overlay, FB_WIDTH, FB_HEIGHT, buttons);
+            gamepad_overlay::draw(&mut display, DISPLAY_WIDTH, DISPLAY_HEIGHT, buttons);
         }
         window
-            .update_with_buffer(&overlay, FB_WIDTH, FB_HEIGHT)
+            .update_with_buffer(&display, DISPLAY_WIDTH, DISPLAY_HEIGHT)
             .context("update window")?;
 
         if let Some((_handle, player_out)) = audio.as_ref() {
@@ -291,17 +293,32 @@ fn run_window(disc: &Path, cli: &Cli) -> Result<()> {
 }
 
 fn save_screenshot_png(framebuffer: &[u32], path: &Path) -> Result<()> {
-    let mut img = image::RgbaImage::new(FB_WIDTH as u32, FB_HEIGHT as u32);
-    for (i, &px) in framebuffer.iter().enumerate() {
+    let mut display = vec![0; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+    scale_to_display(framebuffer, &mut display);
+    let mut img = image::RgbaImage::new(DISPLAY_WIDTH as u32, DISPLAY_HEIGHT as u32);
+    for (i, &px) in display.iter().enumerate() {
         let r = ((px >> 16) & 0xFF) as u8;
         let g = ((px >> 8) & 0xFF) as u8;
         let b = (px & 0xFF) as u8;
-        let x = (i % FB_WIDTH) as u32;
-        let y = (i / FB_WIDTH) as u32;
+        let x = (i % DISPLAY_WIDTH) as u32;
+        let y = (i / DISPLAY_WIDTH) as u32;
         img.put_pixel(x, y, image::Rgba([r, g, b, 0xFF]));
     }
     img.save(path).context("save screenshot")?;
     Ok(())
+}
+
+fn scale_to_display(source: &[u32], display: &mut [u32]) {
+    debug_assert_eq!(source.len(), FB_WIDTH * FB_HEIGHT);
+    debug_assert_eq!(display.len(), DISPLAY_WIDTH * DISPLAY_HEIGHT);
+    for y in 0..DISPLAY_HEIGHT {
+        let source_row = y * FB_WIDTH;
+        let display_row = y * DISPLAY_WIDTH;
+        for x in 0..DISPLAY_WIDTH {
+            let source_x = x * FB_WIDTH / DISPLAY_WIDTH;
+            display[display_row + x] = source[source_row + source_x];
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -322,7 +339,7 @@ fn screen_size() -> (usize, usize) {
 
 #[cfg(not(target_os = "windows"))]
 fn screen_size() -> (usize, usize) {
-    (FB_WIDTH * 4, FB_HEIGHT * 4)
+    (DISPLAY_WIDTH * 4, DISPLAY_HEIGHT * 4)
 }
 
 fn merge_buttons(keyboard: InputButtons, gamepad: InputButtons) -> InputButtons {
@@ -357,4 +374,32 @@ fn parse_press_at(value: &str) -> Result<(u32, InputButtons), String> {
         _ => return Err("button must be up, down, left, right, a, b, or start".to_owned()),
     }
     Ok((frame, buttons))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn presentation_frame_is_four_by_three() {
+        assert_eq!((DISPLAY_WIDTH, DISPLAY_HEIGHT), (288, 216));
+        assert_eq!(DISPLAY_WIDTH * 3, DISPLAY_HEIGHT * 4);
+    }
+
+    #[test]
+    fn presentation_scaling_preserves_edges() {
+        let mut source = vec![0; FB_WIDTH * FB_HEIGHT];
+        source[0] = 1;
+        source[FB_WIDTH - 1] = 2;
+        source[(FB_HEIGHT - 1) * FB_WIDTH] = 3;
+        source[FB_WIDTH * FB_HEIGHT - 1] = 4;
+        let mut display = vec![0; DISPLAY_WIDTH * DISPLAY_HEIGHT];
+
+        scale_to_display(&source, &mut display);
+
+        assert_eq!(display[0], 1);
+        assert_eq!(display[DISPLAY_WIDTH - 1], 2);
+        assert_eq!(display[(DISPLAY_HEIGHT - 1) * DISPLAY_WIDTH], 3);
+        assert_eq!(display[DISPLAY_WIDTH * DISPLAY_HEIGHT - 1], 4);
+    }
 }

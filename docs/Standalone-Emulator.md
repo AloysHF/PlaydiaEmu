@@ -65,8 +65,9 @@ after about 10 seconds to the F2 80 timeout destination, or the Start/default
 slot when none is set. `--press-at FRAME:BUTTON` keeps the button held for a
 few frames after FRAME. CUE/BIN images provide the full-disc addresses needed
 for these jumps. Quiz/score semantics beyond timeout are still incomplete.
-The default decoder reconstructs 248×216 game pictures centered in the 320×240
-XRGB8888 framebuffer, retaining eight bits per color channel. It validates all 27 rows before presenting a picture. Unknown
+The default decoder reconstructs a native 248×216 XRGB8888 framebuffer,
+retaining eight bits per color channel. The window frontend presents it at the
+provisional 4:3 display aspect. It validates all 27 rows before presenting a picture. Unknown
 codes or damaged packets retain the previous frame. Rare VLC entries and
 hardware transform/color rounding still need validation.
 
@@ -79,6 +80,9 @@ Screenshot-only (30 frames by default):
 ```powershell
 playdia-emu game.cue -S preview.png --screenshot-frames 60
 ```
+
+PNG screenshots use the same 288×216 4:3 presentation geometry as the window.
+Diagnostic PPM dumps retain the native 248×216 framebuffer.
 
 Example with a local disc path (do not commit discs):
 
@@ -99,7 +103,7 @@ cargo run --release -p playdiaemu -- path\to\game.cue
 | Option | Default | Description |
 |---|---|---|
 | `<DISC>` | *required* | Path to `.cue` (preferred) or raw `.bin`/`.iso` |
-| `-s, --scale N` | `1` | Window scale factor (native 320×240, 1–8) |
+| `-s, --scale N` | `1` | Window scale factor (4:3 presentation is 288×216, 1–8) |
 | `-f, --fullscreen` | off | Borderless fullscreen |
 | `--fps N` | `30` | Target FPS |
 | `-v, --volume N` | `100` | Master audio volume (0–100; `0` disables audio) |

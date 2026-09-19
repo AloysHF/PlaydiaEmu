@@ -27,7 +27,7 @@ Research-grade but usable for disc playback:
 
 - **HLE disc player** — dual-track MODE2 CUE/BIN streaming, F1/F2/F3 video markers, XA ADPCM audio
 - **Interactive stream control** — finish embedded video before F2 jumps or button choices; held buttons select immediately, choices time out to an F2 80 fallback (or the default slot) after ~10 s
-- **Video** — recovered AK8000 row/VLC decoding produces recognizable 248×216 game pictures in a 320×240 XRGB8888 framebuffer (eight bits per color channel); hardware pixel accuracy remains unverified
+- **Video** — recovered AK8000 row/VLC decoding produces recognizable 248×216 XRGB8888 game pictures (eight bits per color channel), presented at 4:3; hardware pixel accuracy and display geometry remain unverified
 - **Audio** — Green Book CD-XA ADPCM, resampled to 44100 Hz stereo
 - **Headless playback** — deterministic `run_frame`, save states, and stream diagnostics
 - **Standalone CLI / window** — window / `--headless` HLE player
@@ -39,7 +39,7 @@ Research-grade but usable for disc playback:
 - **F1/F2/F3 routing** — video fragments including F2 overflow, F3 padding, and F2 scene navigation
 - **XA ADPCM audio** — 4-bit ADPCM sound groups, 37800/18900 Hz → stereo 44100
 - **Native game video** — 27 rows of 4×4 transform blocks, run/level coefficients, macroblock DC prediction and separate Y/C quantizers; invalid pictures preserve the previous frame
-- **Save states** — disc identity + CRC envelope; version 4 stores the complete HLE playback state
+- **Save states** — disc identity + CRC envelope; version 6 stores the complete HLE playback state
 - **Headless / inspect tooling** — sector and packet diagnostics without a window
 - **RetroArch integration** — libretro core for frontend use
 - **Cross-crate core** — platform-independent `playdiaemu-core` with no host I/O

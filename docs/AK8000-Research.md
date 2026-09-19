@@ -32,9 +32,10 @@ factor/64 lead. Nonlinear dequantization, exact hardware transform, and color
 rounding still need comparison with trustworthy captures or chip logic.
 
 Reproduce with `playdia-frame` (`--packet` / `--check-all`); flags and full
-commands: [Tools](Tools.md#playdia-frame). The frame tool exports 248×216
-RGB888 pixels. Playback centers them in 320×240 XRGB8888 and only presents a
-picture after all rows and padding validate. RGB888 is the software
+commands: [Tools](Tools.md#playdia-frame). The frame tool and player export
+248×216 RGB888/XRGB8888 pixels. Frontends present the native frame at the
+provisional 4:3 display aspect. A picture is only presented after all rows and
+padding validate. RGB888 is the software
 reconstruction format, not a verified hardware precision claim. Decode
 failures retain the last complete picture.
 

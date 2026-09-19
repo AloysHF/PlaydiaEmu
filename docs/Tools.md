@@ -52,8 +52,8 @@ cargo run --release -p playdiaemu-tools --bin playdia-frame -- game.cue --check-
 | `--assembled` | Treat input as one assembled packet instead of a disc image |
 
 `--check-all` reports failed indices, track-relative LBAs, rows, blocks, and
-bit offsets. CUE and raw MODE2/2352 BIN are supported. Player 320×240 PPM
-screenshots use the same channel precision, centered on a black border.
+bit offsets. CUE and raw MODE2/2352 BIN are supported. Player PPM screenshots
+use the same 248×216 native geometry and channel precision.
 
 Corpus totals: see [AK8000 corpus validation](AK8000-Corpus-Validation.md)
 (entropy coverage only — not hardware pixels or full-game compatibility).
