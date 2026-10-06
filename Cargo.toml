@@ -22,7 +22,7 @@ clap = { version = "4", features = ["derive"] }
 crc32fast = "1"
 log = "0.4"
 env_logger = "0.11"
-minifb = "0.28"
+minifb = "0.29"
 rodio = "0.22"
 image = { version = "0.25", default-features = false, features = ["png"] }
 gilrs = "=0.11.2"
