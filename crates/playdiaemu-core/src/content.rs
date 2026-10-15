@@ -141,7 +141,12 @@ impl DiscImage {
         let mut archive = zip::ZipArchive::new(file)
             .map_err(|e| LoadError::Zip(format!("{}: {e}", path.display())))?;
 
-        let names: Vec<String> = archive.file_names().map(|s| s.to_owned()).collect();
+        // zip 9: names are ZipResult; skip undecodable ones (as zip's own root_dir does).
+        let names: Vec<String> = archive
+            .file_names()
+            .filter_map(Result::ok)
+            .map(|s| s.into_owned())
+            .collect();
         if let Some(cue_name) = pick_cue_name(&names) {
             let text = read_zip_entry(&mut archive, &cue_name)?;
             let text = String::from_utf8_lossy(&text).into_owned();
