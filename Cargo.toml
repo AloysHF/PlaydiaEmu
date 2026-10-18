@@ -23,7 +23,7 @@ crc32fast = "1"
 log = "0.4"
 env_logger = "0.11"
 minifb = "0.29"
-rodio = "0.22"
+rodio = "0.23"
 image = { version = "0.25", default-features = false, features = ["png"] }
 gilrs = "=0.11.2"
 zip = { version = "9", default-features = false, features = ["deflate"] }
