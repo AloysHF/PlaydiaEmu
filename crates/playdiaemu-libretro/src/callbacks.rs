@@ -1,9 +1,12 @@
 //! libretro callback storage and frontend helpers.
 
 use std::ffi::c_void;
-use std::os::raw::{c_char, c_uint};
+use std::os::raw::c_char;
+#[cfg(not(target_os = "emscripten"))]
+use std::os::raw::c_uint;
 use std::sync::RwLock;
 
+#[cfg(not(target_os = "emscripten"))]
 use crate::constants::RETRO_ENVIRONMENT_GET_LOG_INTERFACE;
 use crate::types::*;
 
@@ -57,6 +60,12 @@ pub fn set_input_state(callback: RetroInputStateCallback) {
     CALLBACKS.write().unwrap().input_state = callback;
 }
 
+/// `retro_log_printf_t` is C-variadic. On Emscripten the callee signature
+/// carries a hidden varargs pointer, so calling it through a plain
+/// `extern "C" fn(u32, *const c_char)` traps with "function signature
+/// mismatch". The EmulatorJS build therefore skips the log interface and
+/// writes to stderr, which the wasm frontend forwards to the console.
+#[cfg(not(target_os = "emscripten"))]
 pub fn initialize_log_interface() {
     unsafe extern "C" fn unused_log(_level: c_uint, _fmt: *const c_char) {}
     CALLBACKS.write().unwrap().log = Some(unused_log);
@@ -70,6 +79,9 @@ pub fn initialize_log_interface() {
         CALLBACKS.write().unwrap().log = interface.log;
     }
 }
+
+#[cfg(target_os = "emscripten")]
+pub fn initialize_log_interface() {}
 
 pub fn environment(command: u32, data: *mut c_void) -> bool {
     let callback = CALLBACKS.read().unwrap().environment;
@@ -107,9 +119,18 @@ pub fn input_state(port: u32, device: u32, index: u32, id: u32) -> i16 {
     unsafe { callback.map_or(0, |callback| callback(port, device, index, id)) }
 }
 
+#[cfg(not(target_os = "emscripten"))]
 pub fn log(level: u32, message: *const c_char) {
     let callback = CALLBACKS.read().unwrap().log;
     if let Some(callback) = callback {
         unsafe { callback(level, message) };
     }
+}
+
+/// Emscripten never receives a log callback (see `initialize_log_interface`),
+/// so logs go straight to stderr and end up in the browser console.
+#[cfg(target_os = "emscripten")]
+pub fn log(_level: u32, message: *const c_char) {
+    let text = unsafe { std::ffi::CStr::from_ptr(message) }.to_string_lossy();
+    eprint!("{}", text);
 }

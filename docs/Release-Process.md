@@ -59,7 +59,9 @@ Pushing the tag triggers `.github/workflows/release.yml`, which:
 
 1. **Builds standalone binaries** for Linux (x86_64 + aarch64), macOS (x86_64 + aarch64), and Windows
 2. **Builds libretro cores** for those platforms plus Android, iOS, and webOS (as `playdiaemu_libretro.<ext>`)
-3. **Creates a draft GitHub Release** with:
+3. **Builds the EmulatorJS core** for the browser as WebAssembly, packaged as
+   `playdia-emu-emulatorjs.zip` with the WebGL2 and legacy `.data` bundles
+4. **Creates a draft GitHub Release** with:
    - Auto-generated release notes (PRs and commits since the previous tag)
    - All build artifacts attached
 
@@ -88,6 +90,10 @@ Pushing the tag triggers `.github/workflows/release.yml`, which:
    - `playdia-emu-android-libretro.tar.gz` (arm64-v8a, armeabi-v7a, x86, x86_64)
    - `playdia-emu-ios-libretro.tar.gz` (device arm64+x86_64 + arm64 simulator)
    - `playdia-emu-webos-libretro.tar.gz` (armv7)
+
+   Browser:
+
+   - `playdia-emu-emulatorjs.zip` (WebGL2 + legacy `.data` bundles and metadata)
 
 5. Click **Publish release**
 
