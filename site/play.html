@@ -9,183 +9,162 @@
   <link rel="icon" type="image/png" href="res/logo.png">
   <link rel="stylesheet" href="css/style.css">
   <style>
-    .play-main {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 112px 24px 64px;
-    }
-    .play-eyebrow {
+    .play-page { min-height: 100vh; background: var(--dark); }
+
+    .play-header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 0.78rem;
-      letter-spacing: 0.18em;
-      color: var(--orange);
-      text-transform: uppercase;
-      margin-bottom: 12px;
+      justify-content: space-between;
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 24px;
     }
-    .play-pulse {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--orange);
-      box-shadow: 0 0 12px var(--orange);
+
+    .play-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
     }
-    .play-title {
-      font-size: clamp(2rem, 5vw, 3rem);
-      line-height: 1.1;
-      margin-bottom: 14px;
+
+    .play-brand img { width: 32px; height: 32px; }
+
+    .play-header-links {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 18px;
     }
+    .play-header-links a { color: var(--text-dim); font-size: 0.9rem; }
+    .play-header-links a:hover { color: var(--teal); }
+
+    .play-main {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 8px 24px 64px;
+    }
+
+    .play-title { font-size: clamp(1.6rem, 4vw, 2.4rem); line-height: 1.2; }
     .play-title span { color: var(--orange); }
-    .play-subtitle {
-      color: var(--text-dim);
-      max-width: 760px;
-      margin-bottom: 28px;
-    }
-    .play-subtitle code {
-      color: var(--text);
-      font-size: 0.95em;
-    }
+
+    .play-subtitle { color: var(--text-dim); margin: 8px 0 20px; max-width: 68ch; }
+    .play-subtitle code { color: var(--text); font-size: 0.95em; }
+
     .play-stage {
       position: relative;
+      width: 100%;
       aspect-ratio: 4 / 3;
-      min-height: 360px;
-      max-height: 640px;
       background: #05070a;
       border: 1px solid rgba(232, 85, 58, 0.25);
-      border-radius: 12px;
+      border-radius: var(--radius);
       overflow: hidden;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
     }
-    .play-stage.is-drop { border-color: var(--orange); }
-    #game, #game canvas {
-      width: 100% !important;
-      height: 100% !important;
-    }
+
+    .play-stage > #game { position: absolute; inset: 0; }
+    #game, #game canvas { width: 100% !important; height: 100% !important; }
+
     .play-overlay {
       position: absolute;
       inset: 0;
+      z-index: 5;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 10px;
-      padding: 32px;
-      text-align: center;
-      background: rgba(5, 7, 10, 0.92);
-      z-index: 2;
-    }
-    .play-overlay[hidden] { display: none; }
-    .play-overlay h2 { font-size: 1.3rem; }
-    .play-overlay p {
-      color: var(--text-dim);
-      max-width: 620px;
-      font-size: 0.95rem;
-    }
-    .play-picker {
       gap: 14px;
+      padding: 24px;
+      text-align: center;
+      background: rgba(5, 7, 10, 0.88);
+      backdrop-filter: blur(3px);
     }
-    .play-file {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
+
+    .play-overlay h2 { font-size: 1.3rem; }
+    .play-overlay p { color: var(--text-dim); max-width: 56ch; }
+    .play-overlay .btn { margin-top: 4px; }
+    .play-overlay[hidden] { display: none; }
+    .play-overlay code { font-family: var(--font-mono); font-size: 0.9em; }
+
+    .play-picker-error { color: #ff6b5b; font-size: 0.85rem; }
+    .play-picker-hint { font-size: 0.78rem; color: #6b7280; }
+    .play-picker-hint a { color: var(--text-dim); text-decoration: underline; }
+
+    .play-stage.is-drop {
+      border-color: rgba(79, 209, 197, 0.6);
+      box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.18), 0 20px 60px rgba(0, 0, 0, 0.45);
     }
-    .play-file-name {
-      font-size: 0.85rem;
-      color: var(--text-dim);
-      max-width: 380px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .play-pick {
-      position: relative;
-      cursor: pointer;
-    }
-    .play-start {
-      margin-top: 6px;
-    }
-    .play-start:disabled {
-      opacity: 0.45;
-      cursor: not-allowed;
-    }
-    .play-picker-error {
-      color: #ff6b5b;
-      font-size: 0.88rem;
-    }
-    .play-picker-hint {
-      font-size: 0.85rem;
-      line-height: 1.7;
-    }
+
     .play-controls {
+      margin-top: 16px;
       display: flex;
       flex-wrap: wrap;
-      gap: 10px 22px;
+      gap: 8px 20px;
       align-items: center;
-      margin-top: 22px;
       color: var(--text-dim);
       font-size: 0.85rem;
     }
+
     .play-controls kbd {
-      background: #151a22;
-      border: 1px solid #2a3140;
-      border-radius: 5px;
-      padding: 2px 6px;
-      color: var(--text);
+      font-family: var(--font-mono);
       font-size: 0.78rem;
+      color: var(--text);
+      background: var(--dark-3);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-bottom-width: 2px;
+      border-radius: 5px;
+      padding: 1px 6px;
     }
+
     .play-reset {
       margin-left: auto;
+      padding: 4px 14px;
+      font: inherit;
+      font-size: 0.8rem;
+      color: var(--text-dim);
       background: transparent;
-      border: 1px solid #2a3140;
-      border-radius: 6px;
-      color: var(--text);
-      padding: 6px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
       cursor: pointer;
     }
-    .play-note {
-      margin-top: 26px;
-      font-size: 0.85rem;
-      line-height: 1.8;
-      color: var(--text-dim);
-    }
-    .play-note a { color: var(--orange); }
-    @media (max-width: 720px) {
-      .play-main { padding-top: 92px; }
-      .play-stage { min-height: 280px; }
+
+    .play-reset:hover { color: var(--teal); border-color: rgba(79, 209, 197, 0.4); }
+    .play-reset[hidden] { display: none; }
+
+    .play-note { margin-top: 12px; font-size: 0.8rem; color: #6b7280; }
+    .play-note a { color: var(--text-dim); text-decoration: underline; }
+
+    @media (max-width: 640px) {
+      .play-header { padding: 16px; }
+      .play-header-links { gap: 12px; }
+      .play-header-links .optional { display: none; }
+      .play-main { padding: 0 16px 40px; }
+      .play-stage { border-radius: 8px; }
     }
   </style>
 </head>
 <body class="play-page">
 
-  <nav id="navbar">
-    <div class="nav-inner">
-      <a href="index.html" class="nav-logo">
-        <img src="res/logo-banner.png" alt="PlaydiaEmu" height="36">
-        <span>PlaydiaEmu</span>
-      </a>
-      <div class="nav-links">
-        <a href="index.html" data-i18n="nav-home">返回首页</a>
-        <a href="index.html#features" data-i18n="nav-features">核心特性</a>
-        <a href="index.html#gallery" data-i18n="nav-games">游戏库</a>
-        <a href="index.html#quickstart" data-i18n="nav-quickstart">快速开始</a>
-        <button id="lang-toggle" class="lang-toggle" aria-label="Switch language">EN</button>
-        <a href="https://github.com/AloysHF/PlaydiaEmu" class="nav-github" target="_blank" rel="noopener">
-          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        </a>
-      </div>
-      <button class="nav-toggle" aria-label="Toggle menu" type="button">
-        <span></span><span></span><span></span>
-      </button>
-    </div>
-  </nav>
+  <header class="play-header">
+    <a href="index.html" class="play-brand">
+      <img src="res/logo.png" alt="PlaydiaEmu">
+      <span>PlaydiaEmu</span>
+    </a>
+    <nav class="play-header-links">
+      <a href="index.html" data-i18n="nav-back">返回首页</a>
+      <button id="lang-toggle" class="lang-toggle" aria-label="Switch language">EN</button>
+      <a href="https://github.com/AloysHF/PlaydiaEmu" class="optional" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </header>
 
   <main class="play-main">
-    <p class="play-eyebrow"><span class="play-pulse"></span> <span data-i18n="eyebrow">BROWSER PLAY · EMULATORJS</span></p>
-    <h1 class="play-title" data-i18n="title">在线试玩 <span>Playdia</span></h1>
-    <p class="play-subtitle" data-i18n="subtitle">选择本机上的光盘镜像（<code>.iso</code> 或包含 CUE/BIN 的 <code>.zip</code>），由 <strong>EmulatorJS</strong> 与 PlaydiaEmu WebAssembly 核心在浏览器中直接运行，无需安装，也不需要 BIOS。</p>
+    <h1 class="play-title" data-i18n="title">在线试玩 <span>Playdia</span> 游戏</h1>
+    <p class="play-subtitle" data-i18n="subtitle">
+      选择本机上的光盘镜像（<code>.iso</code>，或包含 CUE/BIN 的 <code>.zip</code>），由
+      <strong>EmulatorJS</strong> 与 PlaydiaEmu WebAssembly 核心在浏览器中直接运行，无需安装，也不需要 BIOS。
+    </p>
 
     <div class="play-stage">
       <div id="game"></div>
@@ -195,24 +174,28 @@
         <p data-i18n="status-desc">首次启动需要下载 WebAssembly 核心，请稍候。</p>
       </div>
 
-      <div id="play-picker" class="play-overlay play-picker">
-        <h2 data-i18n="picker-title">选择游戏镜像</h2>
-        <p data-i18n="picker-desc">支持单文件 <code>.iso</code>，或包含 CUE + BIN 的 <code>.zip</code>。Playdia 光盘为双轨 MODE2，CUE 与 BIN 必须打包在一起。</p>
-        <div class="play-file">
-          <label class="btn btn-primary play-pick">
-            <span data-i18n="pick-game">选择游戏镜像</span>
-            <input id="game-file" type="file" accept=".iso,.cue,.bin,.zip,application/zip,application/octet-stream" hidden>
-          </label>
-          <span id="game-name" class="play-file-name" data-i18n="not-chosen">未选择</span>
-        </div>
-        <button id="play-start" class="btn btn-primary play-start" type="button" data-i18n="start" disabled>开始游戏</button>
+      <div id="play-picker" class="play-overlay">
+        <h2 data-i18n="picker-title">选择光盘镜像</h2>
+        <p data-i18n="picker-desc">
+          支持单文件 <code>.iso</code>，或包含 CUE + BIN 的 <code>.zip</code>。Playdia 光盘为双轨 MODE2，CUE 与 BIN 必须打包在一起。
+        </p>
+        <label class="btn btn-primary">
+          <span data-i18n="pick-game">选择游戏镜像</span>
+          <input id="game-file" type="file" accept=".iso,.zip,application/zip" hidden>
+        </label>
         <p id="play-picker-error" class="play-picker-error" hidden></p>
-        <p class="play-picker-hint" data-i18n="picker-hint">文件只在浏览器本地处理，不会被上传。可玩的游戏见 <a href="https://github.com/AloysHF/PlaydiaEmu/blob/master/docs/Game-Compatibility.md">兼容列表</a>。</p>
+        <p class="play-picker-hint" data-i18n="picker-hint">
+          也可以把镜像拖进窗口。文件只在浏览器本地处理，不会被上传。可玩的游戏见
+          <a href="https://github.com/AloysHF/PlaydiaEmu/blob/master/docs/Game-Compatibility.md" target="_blank" rel="noopener">兼容列表</a>。
+        </p>
       </div>
 
       <div id="play-error" class="play-overlay" hidden>
         <h2 data-i18n="error-title">无法启动在线模拟器</h2>
-        <p class="play-error-text" data-i18n="error-text">EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请在本地通过 Pages 部署流程生成 <code>site/data</code>，或直接使用独立版模拟器。</p>
+        <p data-i18n="error-text">
+          EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请通过 Pages 部署流程生成
+          <code>site/data</code>，或直接使用独立版模拟器。
+        </p>
       </div>
     </div>
 
@@ -225,7 +208,12 @@
       <button id="play-reset" class="play-reset" type="button" data-i18n="reset" hidden>换一个游戏</button>
     </div>
 
-    <p class="play-note" data-i18n="note">在线试玩使用 <a href="https://emulatorjs.org">EmulatorJS</a>，即时存档只保存在浏览器本地。游戏数据不随本站分发，请使用自己合法持有的光盘转储。想离线游玩？从 <a href="https://github.com/AloysHF/PlaydiaEmu/releases">Releases</a> 下载独立模拟器或 RetroArch 核心。</p>
+    <p class="play-note" data-i18n="note">
+      在线试玩使用 <a href="https://emulatorjs.org" target="_blank" rel="noopener">EmulatorJS</a>，
+      即时存档只保存在浏览器本地。游戏数据不随本站分发，请使用自己合法持有的光盘转储。想离线游玩？从
+      <a href="https://github.com/AloysHF/PlaydiaEmu/releases" target="_blank" rel="noopener">Releases</a>
+      下载独立模拟器或 RetroArch 核心。
+    </p>
   </main>
 
   <script>
@@ -236,50 +224,38 @@
         zh: {
           'meta-title': '在线试玩 Playdia — PlaydiaEmu',
           'meta-desc': '在浏览器中加载 Bandai Playdia 光盘镜像即可直接运行，无需安装、无需 BIOS。由 EmulatorJS 与 PlaydiaEmu WebAssembly 核心驱动。',
-          'nav-home': '返回首页',
-          'nav-features': '核心特性',
-          'nav-games': '游戏库',
-          'nav-quickstart': '快速开始',
-          'eyebrow': 'BROWSER PLAY · EMULATORJS',
-          'title': '在线试玩 <span>Playdia</span>',
-          'subtitle': '选择本机上的光盘镜像（<code>.iso</code> 或包含 CUE/BIN 的 <code>.zip</code>），由 <strong>EmulatorJS</strong> 与 PlaydiaEmu WebAssembly 核心在浏览器中直接运行，无需安装，也不需要 BIOS。',
+          'nav-back': '返回首页',
+          'title': '在线试玩 <span>Playdia</span> 游戏',
+          'subtitle': '选择本机上的光盘镜像（<code>.iso</code>，或包含 CUE/BIN 的 <code>.zip</code>），由 <strong>EmulatorJS</strong> 与 PlaydiaEmu WebAssembly 核心在浏览器中直接运行，无需安装，也不需要 BIOS。',
           'status-title': '正在加载核心…',
           'status-desc': '首次启动需要下载 WebAssembly 核心，请稍候。',
-          'picker-title': '选择游戏镜像',
+          'picker-title': '选择光盘镜像',
           'picker-desc': '支持单文件 <code>.iso</code>，或包含 CUE + BIN 的 <code>.zip</code>。Playdia 光盘为双轨 MODE2，CUE 与 BIN 必须打包在一起。',
           'pick-game': '选择游戏镜像',
-          'not-chosen': '未选择',
-          'start': '开始游戏',
-          'picker-hint': '文件只在浏览器本地处理，不会被上传。可玩的游戏见 <a href="https://github.com/AloysHF/PlaydiaEmu/blob/master/docs/Game-Compatibility.md">兼容列表</a>。',
+          'picker-hint': '也可以把镜像拖进窗口。文件只在浏览器本地处理，不会被上传。可玩的游戏见 <a href="https://github.com/AloysHF/PlaydiaEmu/blob/master/docs/Game-Compatibility.md" target="_blank" rel="noopener">兼容列表</a>。',
           'error-title': '无法启动在线模拟器',
-          'error-text': 'EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请在本地通过 Pages 部署流程生成 <code>site/data</code>，或直接使用独立版模拟器。',
+          'error-text': 'EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请通过 Pages 部署流程生成 <code>site/data</code>，或直接使用独立版模拟器。',
           'ctrl-move': '<kbd>方向键</kbd> 移动',
           'ctrl-ab': '<kbd>X</kbd> / <kbd>Z</kbd> A / B 键',
           'ctrl-start': '<kbd>Enter</kbd> START',
           'ctrl-select': '<kbd>Shift</kbd> SELECT',
           'ctrl-gamepad': '支持手柄与手机触屏',
           'reset': '换一个游戏',
-          'note': '在线试玩使用 <a href="https://emulatorjs.org">EmulatorJS</a>，即时存档只保存在浏览器本地。游戏数据不随本站分发，请使用自己合法持有的光盘转储。想离线游玩？从 <a href="https://github.com/AloysHF/PlaydiaEmu/releases">Releases</a> 下载独立模拟器或 RetroArch 核心。',
+          'note': '在线试玩使用 <a href="https://emulatorjs.org" target="_blank" rel="noopener">EmulatorJS</a>，即时存档只保存在浏览器本地。游戏数据不随本站分发，请使用自己合法持有的光盘转储。想离线游玩？从 <a href="https://github.com/AloysHF/PlaydiaEmu/releases" target="_blank" rel="noopener">Releases</a> 下载独立模拟器或 RetroArch 核心。',
           'invalid-game': '仅支持 .iso 光盘镜像，或包含 CUE/BIN 的 .zip 文件。'
         },
         en: {
           'meta-title': 'Play Playdia Online — PlaydiaEmu',
           'meta-desc': 'Load a Bandai Playdia disc image in your browser, no install and no BIOS required. Powered by EmulatorJS and the PlaydiaEmu WebAssembly core.',
-          'nav-home': 'Back to Home',
-          'nav-features': 'Features',
-          'nav-games': 'Games',
-          'nav-quickstart': 'Quick Start',
-          'eyebrow': 'BROWSER PLAY · EMULATORJS',
-          'title': 'Play <span>Playdia</span> Online',
+          'nav-back': 'Back to Home',
+          'title': 'Play <span>Playdia</span> Games Online',
           'subtitle': 'Pick a disc image (<code>.iso</code>, or a <code>.zip</code> containing CUE/BIN) — <strong>EmulatorJS</strong> and the PlaydiaEmu WebAssembly core run it right in the browser, with no install and no BIOS.',
           'status-title': 'Loading core…',
           'status-desc': 'The first launch downloads the WebAssembly core.',
           'picker-title': 'Choose a game disc',
           'picker-desc': 'Use a single-file <code>.iso</code>, or a <code>.zip</code> containing CUE + BIN. Playdia discs are dual-track MODE2, so the CUE and BIN must be packed together.',
           'pick-game': 'Choose Disc Image',
-          'not-chosen': 'Not selected',
-          'start': 'Start Game',
-          'picker-hint': 'Files are processed locally in your browser and never uploaded. See the <a href="https://github.com/AloysHF/PlaydiaEmu/blob/master/docs/Game-Compatibility.md">compatibility list</a> for playable titles.',
+          'picker-hint': 'You can also drop an image onto the window. Files are processed locally in your browser and never uploaded. See the <a href="https://github.com/AloysHF/PlaydiaEmu/blob/master/docs/Game-Compatibility.md" target="_blank" rel="noopener">compatibility list</a> for playable titles.',
           'error-title': 'Unable to start the online emulator',
           'error-text': 'The EmulatorJS runtime is not deployed (missing <code>data/loader.js</code>). Generate <code>site/data</code> through the Pages workflow, or use the standalone emulator.',
           'ctrl-move': '<kbd>Arrows</kbd> Move',
@@ -288,7 +264,7 @@
           'ctrl-select': '<kbd>Shift</kbd> SELECT',
           'ctrl-gamepad': 'Gamepad and touch controls supported',
           'reset': 'Play another game',
-          'note': 'Online play uses <a href="https://emulatorjs.org">EmulatorJS</a>; save states stay in your browser only. Game data is not distributed with this site, so use your own legally dumped discs. Prefer playing offline? Download the standalone emulator or the RetroArch core from <a href="https://github.com/AloysHF/PlaydiaEmu/releases">Releases</a>.',
+          'note': 'Online play uses <a href="https://emulatorjs.org" target="_blank" rel="noopener">EmulatorJS</a>; save states stay in your browser only. Game data is not distributed with this site, so use your own legally dumped discs. Prefer playing offline? Download the standalone emulator or the RetroArch core from <a href="https://github.com/AloysHF/PlaydiaEmu/releases" target="_blank" rel="noopener">Releases</a>.',
           'invalid-game': 'Only .iso disc images or .zip archives containing CUE/BIN are supported.'
         }
       };
@@ -318,7 +294,6 @@
         if (description) description.setAttribute('content', t['meta-desc']);
         languageButton.textContent = lang === 'zh' ? 'EN' : '中文';
         languageButton.setAttribute('aria-label', lang === 'zh' ? 'Switch to English' : '切换到中文');
-        if (!gameFile) gameName.textContent = t['not-chosen'];
 
         try {
           localStorage.setItem(storageKey, lang);
@@ -328,33 +303,21 @@
       }
 
       var RUNTIME_PATH = 'data/';
-      var GAME_EXTENSIONS = /\.(iso|cue|bin|zip)$/i;
+      var GAME_EXTENSIONS = /\.(iso|zip)$/i;
       var stage = document.querySelector('.play-stage');
       var status = document.getElementById('play-status');
       var picker = document.getElementById('play-picker');
       var pickerError = document.getElementById('play-picker-error');
       var error = document.getElementById('play-error');
       var gameInput = document.getElementById('game-file');
-      var gameName = document.getElementById('game-name');
-      var startButton = document.getElementById('play-start');
       var resetButton = document.getElementById('play-reset');
-      var gameFile = null;
       var booted = false;
 
       function show(element) { element.hidden = false; }
       function hide(element) { element.hidden = true; }
 
-      function updateStart() {
-        startButton.disabled = !gameFile;
-      }
-
-      function fail(messageKey) {
-        pickerError.textContent = translations[currentLang][messageKey];
-        show(pickerError);
-      }
-
-      function boot() {
-        if (booted || !gameFile) return;
+      function boot(file) {
+        if (booted) return;
         booted = true;
         hide(picker);
         hide(error);
@@ -366,8 +329,8 @@
         // Blob URLs have no file name, so EJS_gameName must keep the extension:
         // EmulatorJS writes the content under this name in the wasm filesystem
         // and the core opens it by path (need_fullpath).
-        window.EJS_gameUrl = URL.createObjectURL(gameFile);
-        window.EJS_gameName = gameFile.name;
+        window.EJS_gameUrl = URL.createObjectURL(file);
+        window.EJS_gameName = file.name;
         window.EJS_pathtodata = RUNTIME_PATH;
         window.EJS_startOnLoaded = false;
         window.EJS_backgroundColor = '#0A0E14';
@@ -389,22 +352,20 @@
         document.body.appendChild(runtime);
       }
 
-      gameInput.addEventListener('change', function () {
-        var file = gameInput.files && gameInput.files[0];
+      function pick(file) {
         if (!file) return;
         if (!GAME_EXTENSIONS.test(file.name)) {
-          gameFile = null;
-          gameName.textContent = translations[currentLang]['not-chosen'];
-          fail('invalid-game');
-        } else {
-          gameFile = file;
-          gameName.textContent = file.name;
-          hide(pickerError);
+          pickerError.textContent = translations[currentLang]['invalid-game'];
+          show(pickerError);
+          return;
         }
-        updateStart();
-      });
+        hide(pickerError);
+        boot(file);
+      }
 
-      startButton.addEventListener('click', boot);
+      gameInput.addEventListener('change', function () {
+        pick(gameInput.files && gameInput.files[0]);
+      });
 
       var dragDepth = 0;
 
@@ -431,16 +392,7 @@
         dragDepth = 0;
         stage.classList.remove('is-drop');
         if (booted) return;
-        var file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
-        if (!file) return;
-        if (GAME_EXTENSIONS.test(file.name)) {
-          gameFile = file;
-          gameName.textContent = file.name;
-          hide(pickerError);
-        } else {
-          fail('invalid-game');
-        }
-        updateStart();
+        pick(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
       });
 
       resetButton.addEventListener('click', function () {
@@ -450,14 +402,6 @@
       languageButton.addEventListener('click', function () {
         applyLang(currentLang === 'zh' ? 'en' : 'zh');
       });
-
-      var navToggle = document.querySelector('.nav-toggle');
-      var navLinks = document.querySelector('.nav-links');
-      if (navToggle && navLinks) {
-        navToggle.addEventListener('click', function () {
-          navLinks.classList.toggle('open');
-        });
-      }
 
       applyLang(currentLang);
     })();
