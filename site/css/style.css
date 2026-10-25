@@ -927,6 +927,70 @@ body::after {
 }
 
 /* ============================================================
+   PLAY ONLINE (landing CTA)
+   ============================================================ */
+.nav-links a.nav-play {
+  color: var(--orange);
+  font-weight: 600;
+}
+
+.nav-links a.nav-play:hover { color: var(--teal); }
+
+.btn-play {
+  background: rgba(79, 209, 197, 0.12);
+  color: var(--teal);
+  border: 1px solid rgba(79, 209, 197, 0.35);
+}
+
+.btn-play:hover {
+  background: rgba(79, 209, 197, 0.2);
+  transform: translateY(-2px);
+}
+
+.play-cta {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 40px;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(232, 85, 58, 0.12), rgba(10, 14, 20, 0.9) 55%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 36px;
+}
+
+.play-cta-cover img {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: block;
+}
+
+.play-cta-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.play-cta-badge {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  border: 1px solid rgba(79, 209, 197, 0.3);
+  border-radius: 999px;
+  padding: 4px 12px;
+}
+
+.play-cta-body h2 { font-size: 2rem; line-height: 1.2; }
+.play-cta-body p { color: var(--text-dim); max-width: 52ch; }
+
+@media (max-width: 720px) {
+  .play-cta { grid-template-columns: 1fr; padding: 24px; }
+  .play-cta-cover { max-width: 360px; }
+}
+
+/* ============================================================
    FOOTER
    ============================================================ */
 #footer {
