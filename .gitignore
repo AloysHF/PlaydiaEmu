@@ -15,3 +15,5 @@ CLAUDE.md
 .DS_Store
 Thumbs.db
 *.swp
+out/
+site/data/

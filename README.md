@@ -42,6 +42,7 @@ Research-grade but usable for disc playback:
 - **Save states** — disc identity + CRC envelope; version 6 stores the complete HLE playback state
 - **Headless / inspect tooling** — sector and packet diagnostics without a window
 - **RetroArch integration** — libretro core for frontend use
+- **Browser play** — EmulatorJS core compiled to WebAssembly, with a ready-to-use [online player](https://AloysHF.github.io/PlaydiaEmu/play.html) that runs disc images without uploading them
 - **Cross-crate core** — platform-independent `playdiaemu-core` with no host I/O
 
 ## Usage
@@ -76,6 +77,14 @@ standalone emulator (no BIOS). See [RetroArch Core](docs/RetroArch-Core.md)
 for build, install (cdylib rename + `.info`), RetroPad mapping, features,
 and limitations.
 
+### Browser (EmulatorJS)
+
+Open <https://AloysHF.github.io/PlaydiaEmu/play.html>, then pick a single-file
+`.iso` or a `.zip` containing CUE + BIN. It runs locally in the browser through
+the PlaydiaEmu WebAssembly core with no BIOS; nothing is uploaded. See the
+[EmulatorJS Core](docs/EmulatorJS-Core.md) guide for embedding the core in your
+own EmulatorJS deployment, bundle contents, and controls.
+
 ## Building
 
 Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
@@ -84,6 +93,23 @@ Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
 |--------|---------|---------|
 | Standalone (`playdia-emu`) | `cargo build --release -p playdiaemu` | Binary: `target/release/playdia-emu` (`.exe` on Windows). Full CLI, keys, headless: [Standalone Emulator](docs/Standalone-Emulator.md) |
 | Libretro core | `cargo build --release -p playdiaemu-libretro` | Rename cdylib → `playdiaemu_libretro.<ext>` and install `.info`: [RetroArch Core](docs/RetroArch-Core.md) |
+| EmulatorJS core | `scripts/build-emulatorjs-core.sh` | Needs emsdk, `p7zip`, and the wasm staticlib build: [EmulatorJS Core](docs/EmulatorJS-Core.md) |
+
+### EmulatorJS Core (for the browser)
+
+The browser core links the libretro core into EmulatorJS's RetroArch fork. It
+needs an activated emsdk, `p7zip`, and the pinned nightly toolchain:
+
+```bash
+cargo +nightly build -p playdiaemu-libretro \
+  --target wasm32-unknown-emscripten --profile wasm-release \
+  -Zbuild-std=std,panic_abort
+
+scripts/build-emulatorjs-core.sh
+```
+
+The bundle is written to `out/playdia-emu-emulatorjs.zip`. See
+[EmulatorJS Core](docs/EmulatorJS-Core.md) for details.
 
 ## Testing
 
