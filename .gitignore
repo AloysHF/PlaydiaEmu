@@ -8,6 +8,8 @@ __pycache__/
 # CodeGraph index
 .codegraph/
 
+.claude/
+
 # Local agent instructions
 CLAUDE.md
 
