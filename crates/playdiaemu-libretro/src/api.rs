@@ -24,106 +24,141 @@ fn cstr(bytes: &[u8]) -> *const c_char {
     bytes.as_ptr() as *const c_char
 }
 
+/// Run `body`, turning a panic into `fallback`.
+///
+/// A panic must never unwind across the C ABI: the frontend is a host process
+/// (RetroDroid, RetroArch) that would be torn down with us. Swallowing the
+/// panic keeps the session recoverable and leaves a log entry behind.
+fn guard<T>(fallback: T, body: impl FnOnce() -> T) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(value) => value,
+        Err(payload) => {
+            let detail = payload
+                .downcast_ref::<&str>()
+                .map(|text| (*text).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_owned());
+            log::error!("PlaydiaEmu libretro entry point panicked: {detail}");
+            fallback
+        }
+    }
+}
+
 // ============================================================
 // Startup / callbacks
 // ============================================================
 
 #[no_mangle]
 pub extern "C" fn retro_set_environment(callback: RetroEnvironmentCallback) {
-    callbacks::set_environment(callback);
-    set_core_options();
+    guard((), || {
+        callbacks::set_environment(callback);
+        set_core_options();
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_video_refresh(callback: RetroVideoRefreshCallback) {
-    callbacks::set_video_refresh(callback);
+    guard((), || callbacks::set_video_refresh(callback));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample(_callback: RetroAudioSampleCallback) {
     // Accepted for ABI completeness; audio is delivered through the batch
     // callback only, so there is nothing to store.
+    guard((), || {});
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample_batch(callback: RetroAudioSampleBatchCallback) {
-    callbacks::set_audio_sample_batch(callback);
+    guard((), || callbacks::set_audio_sample_batch(callback));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_poll(callback: RetroInputPollCallback) {
-    callbacks::set_input_poll(callback);
+    guard((), || callbacks::set_input_poll(callback));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_state(callback: RetroInputStateCallback) {
-    callbacks::set_input_state(callback);
+    guard((), || callbacks::set_input_state(callback));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_api_version() -> c_uint {
-    RETRO_API_VERSION as c_uint
+    guard(RETRO_API_VERSION as c_uint, || RETRO_API_VERSION as c_uint)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_init() {
-    callbacks::initialize_log_interface();
-    logger::initialize();
-    log::info!("Libretro core initialized");
+    guard((), || {
+        callbacks::initialize_log_interface();
+        logger::initialize();
+        log::info!("Libretro core initialized");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_deinit() {
-    *CORE.lock().unwrap() = None;
-    logger::set_debug_logging(false);
-    log::info!("Libretro core deinitialized");
+    guard((), || {
+        if let Ok(mut core) = CORE.lock() {
+            *core = None;
+        }
+        logger::set_debug_logging(false);
+        log::info!("Libretro core deinitialized");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_system_info(info: *mut RetroSystemInfo) {
-    let Some(info) = (unsafe { info.as_mut() }) else {
-        return;
-    };
-    info.library_name = c"PlaydiaEmu".as_ptr();
-    info.library_version = c"0.1.0".as_ptr();
-    // Every format `DiscImage::from_path` understands: CUE+BIN, ZIP, and raw
-    // or cooked single-file images.
-    info.valid_extensions = c"cue|zip|iso|bin|img".as_ptr();
-    // CUE and ZIP content is resolved relative to the content file, so the
-    // frontend must hand us a real path instead of a memory buffer.
-    info.need_fullpath = true;
-    // Pass ZIP paths to the core; do not let the frontend extract them.
-    info.block_extract = true;
+    guard((), || {
+        let Some(info) = (unsafe { info.as_mut() }) else {
+            return;
+        };
+        info.library_name = c"PlaydiaEmu".as_ptr();
+        info.library_version = c"0.1.0".as_ptr();
+        // Every format `DiscImage::from_path` understands: CUE+BIN, ZIP, and
+        // raw or cooked single-file images.
+        info.valid_extensions = c"cue|zip|iso|bin|img".as_ptr();
+        // CUE and ZIP content is resolved relative to the content file, so the
+        // frontend must hand us a real path instead of a memory buffer.
+        info.need_fullpath = true;
+        // Pass ZIP paths to the core; do not let the frontend extract them.
+        info.block_extract = true;
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_system_av_info(info: *mut RetroSystemAvInfo) {
-    let Some(info) = (unsafe { info.as_mut() }) else {
-        return;
-    };
-    info.geometry = RetroGameGeometry {
-        base_width: FB_WIDTH as c_uint,
-        base_height: FB_HEIGHT as c_uint,
-        max_width: FB_WIDTH as c_uint,
-        max_height: FB_HEIGHT as c_uint,
-        aspect_ratio: 4.0 / 3.0,
-    };
-    info.timing = RetroSystemTiming {
-        fps: FRAMES_PER_SECOND,
-        sample_rate: OUTPUT_SAMPLE_RATE,
-    };
+    guard((), || {
+        let Some(info) = (unsafe { info.as_mut() }) else {
+            return;
+        };
+        info.geometry = RetroGameGeometry {
+            base_width: FB_WIDTH as c_uint,
+            base_height: FB_HEIGHT as c_uint,
+            max_width: FB_WIDTH as c_uint,
+            max_height: FB_HEIGHT as c_uint,
+            aspect_ratio: 4.0 / 3.0,
+        };
+        info.timing = RetroSystemTiming {
+            fps: FRAMES_PER_SECOND,
+            sample_rate: OUTPUT_SAMPLE_RATE,
+        };
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_controller_port_device(port: c_uint, device: c_uint) {
-    if port == 0 && device != 0 && device != RETRO_DEVICE_JOYPAD {
-        log::warn!("Unsupported controller device {device} on port {port}");
-    }
+    guard((), || {
+        if port == 0 && device != 0 && device != RETRO_DEVICE_JOYPAD {
+            log::warn!("Unsupported controller device {device} on port {port}");
+        }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_region() -> c_uint {
-    RETRO_REGION_NTSC
+    guard(RETRO_REGION_NTSC, || RETRO_REGION_NTSC)
 }
 
 // ============================================================
@@ -132,48 +167,54 @@ pub extern "C" fn retro_get_region() -> c_uint {
 
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
-    let Some(info) = (unsafe { info.as_ref() }) else {
-        return fail("Playdia: the frontend passed no game information.");
-    };
-    // `need_fullpath` is true: a CUE sheet or ZIP reaches its data through
-    // sibling files, so an in-memory copy cannot be loaded. Reject it instead
-    // of silently pretending to support it.
-    if info.path.is_null() {
-        return fail(
-            "Playdia: in-memory content is not supported; \
+    guard(false, || {
+        let Some(info) = (unsafe { info.as_ref() }) else {
+            return fail("Playdia: the frontend passed no game information.");
+        };
+        // `need_fullpath` is true: a CUE sheet or ZIP reaches its data through
+        // sibling files, so an in-memory copy cannot be loaded. Reject it instead
+        // of silently pretending to support it.
+        if info.path.is_null() {
+            return fail(
+                "Playdia: in-memory content is not supported; \
              pass a .cue, .iso, .bin, .img or .zip file path.",
-        );
-    }
-    let path = match unsafe { CStr::from_ptr(info.path) }.to_str() {
-        Ok(path) => std::path::PathBuf::from(path),
-        Err(error) => {
-            return fail(&format!(
-                "Playdia: the content path is not valid UTF-8 ({error})."
-            ))
+            );
         }
-    };
+        let path = match unsafe { CStr::from_ptr(info.path) }.to_str() {
+            Ok(path) => std::path::PathBuf::from(path),
+            Err(error) => {
+                return fail(&format!(
+                    "Playdia: the content path is not valid UTF-8 ({error})."
+                ))
+            }
+        };
 
-    let mut player = playdiaemu_core::player::DiscPlayer::new();
-    // Declare the frame format before touching content so a frontend that
-    // cannot offer it fails fast instead of after a partial load.
-    if !set_pixel_format() {
-        return fail("Playdia: this frontend does not support XRGB8888 video.");
-    }
-    if let Err(error) = player.load_path(&path) {
-        return fail(&format!(
-            "Playdia: failed to load \"{}\".\n{error}\n\n\
+        let mut player = playdiaemu_core::player::DiscPlayer::new();
+        // Declare the frame format before touching content so a frontend that
+        // cannot offer it fails fast instead of after a partial load.
+        if !set_pixel_format() {
+            return fail("Playdia: this frontend does not support XRGB8888 video.");
+        }
+        if let Err(error) = player.load_path(&path) {
+            return fail(&format!(
+                "Playdia: failed to load \"{}\".\n{error}\n\n\
              Supported content: .cue + .bin, .iso, .bin, .img, \
              or a .zip containing a CUE/BIN set.",
-            path.display()
-        ));
-    }
+                path.display()
+            ));
+        }
 
-    register_input_descriptors();
-    set_performance_level();
-    apply_core_options();
-    *CORE.lock().unwrap() = Some(player);
-    log::info!("Loaded HLE disc player content");
-    true
+        register_input_descriptors();
+        set_performance_level();
+        apply_core_options();
+        if let Ok(mut core) = CORE.lock() {
+            *core = Some(player);
+        } else {
+            return fail("Playdia: the core state is unavailable after a previous panic.");
+        }
+        log::info!("Loaded HLE disc player content");
+        true
+    })
 }
 
 /// Report a load failure to both the log and the frontend's on-screen message.
@@ -192,55 +233,63 @@ pub extern "C" fn retro_load_game_special(
     _info: *const RetroGameInfo,
     _num: usize,
 ) -> bool {
-    false
+    guard(false, || false)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_unload_game() {
-    *CORE.lock().unwrap() = None;
-    log::info!("Game unloaded");
+    guard((), || {
+        if let Ok(mut core) = CORE.lock() {
+            *core = None;
+        }
+        log::info!("Game unloaded");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_reset() {
-    if let Ok(mut guard) = CORE.lock() {
-        if let Some(player) = guard.as_mut() {
-            player.reset();
+    guard((), || {
+        if let Ok(mut guard) = CORE.lock() {
+            if let Some(player) = guard.as_mut() {
+                player.reset();
+            }
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_run() {
-    if core_options_changed() {
-        apply_core_options();
-    }
+    guard((), || {
+        if core_options_changed() {
+            apply_core_options();
+        }
 
-    poll_input();
+        poll_input();
 
-    let Ok(mut guard) = CORE.lock() else {
-        return;
-    };
-    let Some(player) = guard.as_mut() else {
-        return;
-    };
-    let _ = player.run_frame();
-    let fb = player.framebuffer();
-    callbacks::video_refresh(
-        fb.as_ptr() as *const c_void,
-        FB_WIDTH as c_uint,
-        FB_HEIGHT as c_uint,
-        FB_WIDTH * 4,
-    );
+        let Ok(mut guard) = CORE.lock() else {
+            return;
+        };
+        let Some(player) = guard.as_mut() else {
+            return;
+        };
+        let _ = player.run_frame();
+        let fb = player.framebuffer();
+        callbacks::video_refresh(
+            fb.as_ptr() as *const c_void,
+            FB_WIDTH as c_uint,
+            FB_HEIGHT as c_uint,
+            FB_WIDTH * 4,
+        );
 
-    let mut audio = player.drain_audio();
-    if !audio.is_empty() {
-        scale_volume(&mut audio, VOLUME.load(Ordering::Relaxed));
-        // 16-bit stereo frames go through the batch callback only; the legacy
-        // per-sample callback is not part of the contract and a per-sample
-        // fallback would stall the frame when no batch sink is installed.
-        let _ = callbacks::audio_sample_batch(audio.as_ptr(), audio.len() / 2);
-    }
+        let mut audio = player.drain_audio();
+        if !audio.is_empty() {
+            scale_volume(&mut audio, VOLUME.load(Ordering::Relaxed));
+            // 16-bit stereo frames go through the batch callback only; the legacy
+            // per-sample callback is not part of the contract and a per-sample
+            // fallback would stall the frame when no batch sink is installed.
+            let _ = callbacks::audio_sample_batch(audio.as_ptr(), audio.len() / 2);
+        }
+    });
 }
 
 // ============================================================
@@ -249,65 +298,75 @@ pub extern "C" fn retro_run() {
 
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
-    if let Ok(guard) = CORE.lock() {
-        if let Some(player) = guard.as_ref() {
-            return player.save_state().len();
+    guard(0, || {
+        if let Ok(guard) = CORE.lock() {
+            if let Some(player) = guard.as_ref() {
+                return player.save_state().len();
+            }
         }
-    }
-    0
+        0
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
-    if data.is_null() {
-        return false;
-    }
-    if let Ok(guard) = CORE.lock() {
-        if let Some(player) = guard.as_ref() {
-            let blob = player.save_state();
-            if blob.len() > size {
-                return false;
-            }
-            unsafe {
-                ptr::copy_nonoverlapping(blob.as_ptr(), data as *mut u8, blob.len());
-            }
-            return true;
+    guard(false, || {
+        if data.is_null() {
+            return false;
         }
-    }
-    false
+        if let Ok(guard) = CORE.lock() {
+            if let Some(player) = guard.as_ref() {
+                let blob = player.save_state();
+                if blob.len() > size {
+                    return false;
+                }
+                unsafe {
+                    ptr::copy_nonoverlapping(blob.as_ptr(), data as *mut u8, blob.len());
+                }
+                return true;
+            }
+        }
+        false
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
-    if data.is_null() {
-        return false;
-    }
-    let mut buf = vec![0u8; size];
-    unsafe {
-        ptr::copy_nonoverlapping(data as *const u8, buf.as_mut_ptr(), size);
-    }
-    if let Ok(mut guard) = CORE.lock() {
-        if let Some(player) = guard.as_mut() {
-            return player.load_state(&buf).is_ok();
+    guard(false, || {
+        if data.is_null() {
+            return false;
         }
-    }
-    false
+        let mut buf = vec![0u8; size];
+        unsafe {
+            ptr::copy_nonoverlapping(data as *const u8, buf.as_mut_ptr(), size);
+        }
+        if let Ok(mut guard) = CORE.lock() {
+            if let Some(player) = guard.as_mut() {
+                return player.load_state(&buf).is_ok();
+            }
+        }
+        false
+    })
 }
 
 #[no_mangle]
-pub extern "C" fn retro_cheat_reset() {}
+pub extern "C" fn retro_cheat_reset() {
+    guard((), || {});
+}
 
 #[no_mangle]
-pub extern "C" fn retro_cheat_set(_index: c_uint, _enabled: bool, _code: *const c_char) {}
+pub extern "C" fn retro_cheat_set(_index: c_uint, _enabled: bool, _code: *const c_char) {
+    guard((), || {});
+}
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_data(_id: c_uint) -> *mut c_void {
-    ptr::null_mut()
+    guard(ptr::null_mut(), ptr::null_mut)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_size(_id: c_uint) -> usize {
-    0
+    guard(0, || 0)
 }
 
 // ============================================================
@@ -739,6 +798,12 @@ mod tests {
         assert!(CORE.lock().unwrap().is_none());
         retro_deinit();
         let _ = std::fs::remove_file(disc_path);
+    }
+
+    #[test]
+    fn guard_swallows_panics() {
+        assert_eq!(guard(7, || 5), 5);
+        assert_eq!(guard(7, || panic!("boom")), 7);
     }
 
     #[test]
