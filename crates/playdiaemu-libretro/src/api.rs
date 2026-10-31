@@ -133,24 +133,23 @@ pub extern "C" fn retro_get_region() -> c_uint {
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
     let Some(info) = (unsafe { info.as_ref() }) else {
-        log::error!("Playdia: the frontend passed no game information");
-        return false;
+        return fail("Playdia: the frontend passed no game information.");
     };
     // `need_fullpath` is true: a CUE sheet or ZIP reaches its data through
     // sibling files, so an in-memory copy cannot be loaded. Reject it instead
     // of silently pretending to support it.
     if info.path.is_null() {
-        log::error!(
+        return fail(
             "Playdia: in-memory content is not supported; \
-             pass a .cue, .iso, .bin, .img or .zip file path"
+             pass a .cue, .iso, .bin, .img or .zip file path.",
         );
-        return false;
     }
     let path = match unsafe { CStr::from_ptr(info.path) }.to_str() {
         Ok(path) => std::path::PathBuf::from(path),
-        Err(_) => {
-            log::error!("Playdia: the content path is not valid UTF-8");
-            return false;
+        Err(error) => {
+            return fail(&format!(
+                "Playdia: the content path is not valid UTF-8 ({error})."
+            ))
         }
     };
 
@@ -158,12 +157,15 @@ pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
     // Declare the frame format before touching content so a frontend that
     // cannot offer it fails fast instead of after a partial load.
     if !set_pixel_format() {
-        log::error!("Playdia: the frontend rejected the required XRGB8888 pixel format");
-        return false;
+        return fail("Playdia: this frontend does not support XRGB8888 video.");
     }
     if let Err(error) = player.load_path(&path) {
-        log::error!("Playdia: failed to load {}: {error}", path.display());
-        return false;
+        return fail(&format!(
+            "Playdia: failed to load \"{}\".\n{error}\n\n\
+             Supported content: .cue + .bin, .iso, .bin, .img, \
+             or a .zip containing a CUE/BIN set.",
+            path.display()
+        ));
     }
 
     register_input_descriptors();
@@ -172,6 +174,16 @@ pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
     *CORE.lock().unwrap() = Some(player);
     log::info!("Loaded HLE disc player content");
     true
+}
+
+/// Report a load failure to both the log and the frontend's on-screen message.
+///
+/// A bare `false` from `retro_load_game` is a black screen on mobile
+/// frontends; the cause must reach the user.
+fn fail(message: &str) -> bool {
+    log::error!("{message}");
+    callbacks::show_message(message, 240);
+    false
 }
 
 #[no_mangle]
@@ -494,6 +506,7 @@ mod tests {
     static INPUT_DESCRIPTORS_SET: AtomicBool = AtomicBool::new(false);
     static PERFORMANCE_LEVEL_SET: AtomicBool = AtomicBool::new(false);
     static LOG_INTERFACE_SET: AtomicBool = AtomicBool::new(false);
+    static MESSAGE_SEEN: AtomicBool = AtomicBool::new(false);
     static CORE_OPTIONS_SET: AtomicBool = AtomicBool::new(false);
     static CORE_OPTIONS_UPDATED: AtomicBool = AtomicBool::new(false);
     static TEST_VOLUME: Mutex<u8> = Mutex::new(100);
@@ -573,6 +586,11 @@ mod tests {
                 let flag = data as *mut bool;
                 let updated = CORE_OPTIONS_UPDATED.swap(false, Ordering::SeqCst);
                 *flag = updated;
+                true
+            }
+            RETRO_ENVIRONMENT_SET_MESSAGE => {
+                let message = data as *const RetroMessage;
+                MESSAGE_SEEN.store(!(*message).msg.is_null(), Ordering::SeqCst);
                 true
             }
             _ => true,
@@ -656,9 +674,14 @@ mod tests {
 
         let in_memory_disc = synthetic_raw_disc();
         let in_memory = game_info_for_bytes(&in_memory_disc);
+        MESSAGE_SEEN.store(false, Ordering::SeqCst);
         assert!(
             !retro_load_game(&in_memory),
             "in-memory content must be rejected when need_fullpath is set"
+        );
+        assert!(
+            MESSAGE_SEEN.load(Ordering::SeqCst),
+            "a rejected load must reach the user through SET_MESSAGE"
         );
         assert!(CORE.lock().unwrap().is_none());
 

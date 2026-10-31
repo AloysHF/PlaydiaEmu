@@ -67,6 +67,14 @@ pub struct RetroLogCallback {
     pub log: RetroLogPrintfCallback,
 }
 
+/// On-screen message shown by the frontend (RETRO_ENVIRONMENT_SET_MESSAGE).
+#[repr(C)]
+pub struct RetroMessage {
+    pub msg: *const c_char,
+    /// Duration in frames.
+    pub frames: c_uint,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RetroVariable {

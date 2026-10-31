@@ -16,6 +16,7 @@ pub const RETRO_DEVICE_ID_JOYPAD_RIGHT: c_uint = 7;
 pub const RETRO_DEVICE_ID_JOYPAD_A: c_uint = 8;
 pub const RETRO_DEVICE_ID_JOYPAD_X: c_uint = 9;
 
+pub const RETRO_ENVIRONMENT_SET_MESSAGE: c_uint = 6;
 pub const RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL: c_uint = 8;
 pub const RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: c_uint = 10;
 pub const RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: c_uint = 11;

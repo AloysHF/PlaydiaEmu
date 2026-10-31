@@ -8,6 +8,7 @@ use std::sync::RwLock;
 
 #[cfg(not(target_os = "emscripten"))]
 use crate::constants::RETRO_ENVIRONMENT_GET_LOG_INTERFACE;
+use crate::constants::RETRO_ENVIRONMENT_SET_MESSAGE;
 use crate::types::*;
 
 struct Callbacks {
@@ -80,6 +81,24 @@ pub fn initialize_log_interface() {}
 pub fn environment(command: u32, data: *mut c_void) -> bool {
     let callback = CALLBACKS.read().unwrap().environment;
     unsafe { callback.is_some_and(|callback| callback(command, data)) }
+}
+
+/// Ask the frontend to show a short on-screen message.
+///
+/// Headless frontends may answer `false`; callers log the same text, so the
+/// failure still reaches the user through the log interface.
+pub fn show_message(message: &str, frames: u32) {
+    let Ok(c_message) = std::ffi::CString::new(message) else {
+        return;
+    };
+    let message = RetroMessage {
+        msg: c_message.as_ptr(),
+        frames,
+    };
+    environment(
+        RETRO_ENVIRONMENT_SET_MESSAGE,
+        &message as *const RetroMessage as *mut c_void,
+    );
 }
 
 pub fn video_refresh(data: *const c_void, width: u32, height: u32, pitch: usize) {
