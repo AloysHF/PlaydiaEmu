@@ -191,6 +191,9 @@ jobs:
           key: nightly-android
 
       - name: Build libretro core for Android
+        env:
+          # Android 15 devices require 16 KB page alignment for native libraries.
+          RUSTFLAGS: "-C link-arg=-Wl,-z,max-page-size=16384"
         run: |
           cargo ndk \
             -t arm64-v8a -t armeabi-v7a -t x86 -t x86_64 \
@@ -207,6 +210,7 @@ jobs:
           cp target/i686-linux-android/release/libplaydiaemu.so "$out/x86/playdiaemu_libretro_android.so"
           cp target/x86_64-linux-android/release/libplaydiaemu.so "$out/x86_64/playdiaemu_libretro_android.so"
           cp crates/playdiaemu-libretro/playdiaemu_libretro.info "$out/"
+          cp crates/playdiaemu-libretro/android.json "$out/"
           ls -laR "$out"
 
       - name: Package libretro
