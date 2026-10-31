@@ -40,8 +40,9 @@ pub extern "C" fn retro_set_video_refresh(callback: RetroVideoRefreshCallback) {
 }
 
 #[no_mangle]
-pub extern "C" fn retro_set_audio_sample(callback: RetroAudioSampleCallback) {
-    callbacks::set_audio_sample(callback);
+pub extern "C" fn retro_set_audio_sample(_callback: RetroAudioSampleCallback) {
+    // Accepted for ABI completeness; audio is delivered through the batch
+    // callback only, so there is nothing to store.
 }
 
 #[no_mangle]
@@ -223,11 +224,10 @@ pub extern "C" fn retro_run() {
     let mut audio = player.drain_audio();
     if !audio.is_empty() {
         scale_volume(&mut audio, VOLUME.load(Ordering::Relaxed));
-        if callbacks::audio_sample_batch(audio.as_ptr(), audio.len() / 2).is_none() {
-            for pair in audio.chunks_exact(2) {
-                callbacks::audio_sample(pair[0], pair[1]);
-            }
-        }
+        // 16-bit stereo frames go through the batch callback only; the legacy
+        // per-sample callback is not part of the contract and a per-sample
+        // fallback would stall the frame when no batch sink is installed.
+        let _ = callbacks::audio_sample_batch(audio.as_ptr(), audio.len() / 2);
     }
 }
 

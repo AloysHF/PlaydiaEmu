@@ -13,7 +13,6 @@ use crate::types::*;
 struct Callbacks {
     environment: RetroEnvironmentCallback,
     video_refresh: RetroVideoRefreshCallback,
-    audio_sample: RetroAudioSampleCallback,
     audio_sample_batch: RetroAudioSampleBatchCallback,
     input_poll: RetroInputPollCallback,
     input_state: RetroInputStateCallback,
@@ -25,7 +24,6 @@ impl Callbacks {
         Self {
             environment: None,
             video_refresh: None,
-            audio_sample: None,
             audio_sample_batch: None,
             input_poll: None,
             input_state: None,
@@ -42,10 +40,6 @@ pub fn set_environment(callback: RetroEnvironmentCallback) {
 
 pub fn set_video_refresh(callback: RetroVideoRefreshCallback) {
     CALLBACKS.write().unwrap().video_refresh = callback;
-}
-
-pub fn set_audio_sample(callback: RetroAudioSampleCallback) {
-    CALLBACKS.write().unwrap().audio_sample = callback;
 }
 
 pub fn set_audio_sample_batch(callback: RetroAudioSampleBatchCallback) {
@@ -92,13 +86,6 @@ pub fn video_refresh(data: *const c_void, width: u32, height: u32, pitch: usize)
     let callback = CALLBACKS.read().unwrap().video_refresh;
     if let Some(callback) = callback {
         unsafe { callback(data, width, height, pitch) };
-    }
-}
-
-pub fn audio_sample(left: i16, right: i16) {
-    let callback = CALLBACKS.read().unwrap().audio_sample;
-    if let Some(callback) = callback {
-        unsafe { callback(left, right) };
     }
 }
 
