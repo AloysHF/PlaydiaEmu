@@ -154,15 +154,17 @@ pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
     };
 
     let mut player = playdiaemu_core::player::DiscPlayer::new();
+    // Declare the frame format before touching content so a frontend that
+    // cannot offer it fails fast instead of after a partial load.
+    if !set_pixel_format() {
+        log::error!("Playdia: the frontend rejected the required XRGB8888 pixel format");
+        return false;
+    }
     if let Err(error) = player.load_path(&path) {
         log::error!("Playdia: failed to load {}: {error}", path.display());
         return false;
     }
 
-    if !set_pixel_format() {
-        log::error!("Frontend rejected the required XRGB8888 pixel format");
-        return false;
-    }
     register_input_descriptors();
     set_performance_level();
     apply_core_options();
@@ -667,6 +669,13 @@ mod tests {
             size: 0,
             meta: ptr::null(),
         };
+        ACCEPT_FORMAT.store(false, Ordering::SeqCst);
+        assert!(
+            !retro_load_game(&info),
+            "a frontend that rejects XRGB8888 must not get a loaded core"
+        );
+        assert!(CORE.lock().unwrap().is_none());
+        ACCEPT_FORMAT.store(true, Ordering::SeqCst);
         assert!(retro_load_game(&info));
         assert!(CORE.lock().unwrap().is_some());
         assert!(INPUT_DESCRIPTORS_SET.load(Ordering::SeqCst));
