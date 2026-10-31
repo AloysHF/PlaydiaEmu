@@ -85,7 +85,11 @@ pub extern "C" fn retro_get_system_info(info: *mut RetroSystemInfo) {
     };
     info.library_name = c"PlaydiaEmu".as_ptr();
     info.library_version = c"0.1.0".as_ptr();
-    info.valid_extensions = c"cue|zip|iso|bin".as_ptr();
+    // Every format `DiscImage::from_path` understands: CUE+BIN, ZIP, and raw
+    // or cooked single-file images.
+    info.valid_extensions = c"cue|zip|iso|bin|img".as_ptr();
+    // CUE and ZIP content is resolved relative to the content file, so the
+    // frontend must hand us a real path instead of a memory buffer.
     info.need_fullpath = true;
     // Pass ZIP paths to the core; do not let the frontend extract them.
     info.block_extract = true;
@@ -128,33 +132,31 @@ pub extern "C" fn retro_get_region() -> c_uint {
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
     let Some(info) = (unsafe { info.as_ref() }) else {
+        log::error!("Playdia: the frontend passed no game information");
         return false;
     };
-    if info.path.is_null() && (info.data.is_null() || info.size == 0) {
+    // `need_fullpath` is true: a CUE sheet or ZIP reaches its data through
+    // sibling files, so an in-memory copy cannot be loaded. Reject it instead
+    // of silently pretending to support it.
+    if info.path.is_null() {
+        log::error!(
+            "Playdia: in-memory content is not supported; \
+             pass a .cue, .iso, .bin, .img or .zip file path"
+        );
         return false;
     }
+    let path = match unsafe { CStr::from_ptr(info.path) }.to_str() {
+        Ok(path) => std::path::PathBuf::from(path),
+        Err(_) => {
+            log::error!("Playdia: the content path is not valid UTF-8");
+            return false;
+        }
+    };
 
     let mut player = playdiaemu_core::player::DiscPlayer::new();
-    if !info.path.is_null() {
-        let path = unsafe {
-            let mut len = 0usize;
-            while *info.path.add(len) != 0 {
-                len += 1;
-            }
-            std::slice::from_raw_parts(info.path as *const u8, len)
-        };
-        let Ok(s) = std::str::from_utf8(path) else {
-            return false;
-        };
-        if player.load_path(std::path::Path::new(s)).is_err() {
-            return false;
-        }
-    } else {
-        let bytes =
-            unsafe { std::slice::from_raw_parts(info.data as *const u8, info.size).to_vec() };
-        if player.load_bytes(bytes).is_err() {
-            return false;
-        }
+    if let Err(error) = player.load_path(&path) {
+        log::error!("Playdia: failed to load {}: {error}", path.display());
+        return false;
     }
 
     if !set_pixel_format() {
@@ -610,6 +612,14 @@ mod tests {
         }
     }
 
+    fn game_info_for_disc() -> (std::path::PathBuf, std::ffi::CString) {
+        let path =
+            std::env::temp_dir().join(format!("playdia-libretro-{}.bin", std::process::id()));
+        std::fs::write(&path, synthetic_raw_disc()).unwrap();
+        let c_path = std::ffi::CString::new(path.to_string_lossy().as_bytes()).unwrap();
+        (path, c_path)
+    }
+
     #[test]
     fn negotiates_xrgb8888_and_runs_disc_player() {
         let _guard = TEST_LOCK.lock().unwrap();
@@ -642,8 +652,21 @@ mod tests {
         assert!(!retro_load_game(ptr::null()));
         assert!(CORE.lock().unwrap().is_none());
 
-        let disc = synthetic_raw_disc();
-        let info = game_info_for_bytes(&disc);
+        let in_memory_disc = synthetic_raw_disc();
+        let in_memory = game_info_for_bytes(&in_memory_disc);
+        assert!(
+            !retro_load_game(&in_memory),
+            "in-memory content must be rejected when need_fullpath is set"
+        );
+        assert!(CORE.lock().unwrap().is_none());
+
+        let (disc_path, c_path) = game_info_for_disc();
+        let info = RetroGameInfo {
+            path: c_path.as_ptr(),
+            data: ptr::null(),
+            size: 0,
+            meta: ptr::null(),
+        };
         assert!(retro_load_game(&info));
         assert!(CORE.lock().unwrap().is_some());
         assert!(INPUT_DESCRIPTORS_SET.load(Ordering::SeqCst));
@@ -683,6 +706,7 @@ mod tests {
         retro_unload_game();
         assert!(CORE.lock().unwrap().is_none());
         retro_deinit();
+        let _ = std::fs::remove_file(disc_path);
     }
 
     #[test]
