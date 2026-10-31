@@ -296,12 +296,39 @@ pub extern "C" fn retro_run() {
 // Save state / cheats / memory
 // ============================================================
 
+/// Save-state envelope: 4-byte magic followed by a little-endian format
+/// version. The core keeps its own framed payload; this outer header lets the
+/// libretro layer reject states from another core or format version instead of
+/// handing foreign bytes to the disc player.
+const SAVE_STATE_MAGIC: [u8; 4] = *b"PDSS";
+const SAVE_STATE_FORMAT: u32 = 1;
+const SAVE_STATE_HEADER_LEN: usize = SAVE_STATE_MAGIC.len() + std::mem::size_of::<u32>();
+
+fn write_save_state_header(buffer: &mut [u8]) {
+    buffer[..SAVE_STATE_MAGIC.len()].copy_from_slice(&SAVE_STATE_MAGIC);
+    buffer[SAVE_STATE_MAGIC.len()..SAVE_STATE_HEADER_LEN]
+        .copy_from_slice(&SAVE_STATE_FORMAT.to_le_bytes());
+}
+
+/// Returns `Some(payload)` when the envelope matches this build's format.
+fn read_save_state_payload(data: &[u8]) -> Option<&[u8]> {
+    if data.len() < SAVE_STATE_HEADER_LEN || data[..SAVE_STATE_MAGIC.len()] != SAVE_STATE_MAGIC {
+        return None;
+    }
+    let version = u32::from_le_bytes(
+        data[SAVE_STATE_MAGIC.len()..SAVE_STATE_HEADER_LEN]
+            .try_into()
+            .ok()?,
+    );
+    (version == SAVE_STATE_FORMAT).then(|| &data[SAVE_STATE_HEADER_LEN..])
+}
+
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
     guard(0, || {
         if let Ok(guard) = CORE.lock() {
             if let Some(player) = guard.as_ref() {
-                return player.save_state().len();
+                return player.save_state().len() + SAVE_STATE_HEADER_LEN;
             }
         }
         0
@@ -317,12 +344,13 @@ pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
         if let Ok(guard) = CORE.lock() {
             if let Some(player) = guard.as_ref() {
                 let blob = player.save_state();
-                if blob.len() > size {
+                if size < blob.len() + SAVE_STATE_HEADER_LEN {
                     return false;
                 }
-                unsafe {
-                    ptr::copy_nonoverlapping(blob.as_ptr(), data as *mut u8, blob.len());
-                }
+                let buffer = unsafe { std::slice::from_raw_parts_mut(data as *mut u8, size) };
+                write_save_state_header(buffer);
+                buffer[SAVE_STATE_HEADER_LEN..SAVE_STATE_HEADER_LEN + blob.len()]
+                    .copy_from_slice(&blob);
                 return true;
             }
         }
@@ -336,13 +364,14 @@ pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
         if data.is_null() {
             return false;
         }
-        let mut buf = vec![0u8; size];
-        unsafe {
-            ptr::copy_nonoverlapping(data as *const u8, buf.as_mut_ptr(), size);
-        }
+        let buffer = unsafe { std::slice::from_raw_parts(data as *const u8, size) };
+        let Some(payload) = read_save_state_payload(buffer) else {
+            log::warn!("Rejecting save state with an unknown magic or format version");
+            return false;
+        };
         if let Ok(mut guard) = CORE.lock() {
             if let Some(player) = guard.as_mut() {
-                return player.load_state(&buf).is_ok();
+                return player.load_state(payload).is_ok();
             }
         }
         false
@@ -789,7 +818,28 @@ mod tests {
         assert!(n > 0);
         let mut blob = vec![0u8; n];
         assert!(retro_serialize(blob.as_mut_ptr().cast(), blob.len()));
+        assert_eq!(&blob[..4], b"PDSS");
+        assert_eq!(u32::from_le_bytes(blob[4..8].try_into().unwrap()), 1);
+        assert_eq!(
+            &blob[SAVE_STATE_HEADER_LEN..SAVE_STATE_HEADER_LEN + 8],
+            b"PLAYDIA1",
+            "the core payload must stay byte-for-byte untouched"
+        );
         retro_run();
+
+        let mut foreign = blob.clone();
+        foreign[4] = 2;
+        assert!(
+            !retro_unserialize(foreign.as_ptr().cast(), foreign.len()),
+            "another format version must be rejected"
+        );
+        let mut foreign = blob.clone();
+        foreign[0] = b'X';
+        assert!(
+            !retro_unserialize(foreign.as_ptr().cast(), foreign.len()),
+            "a foreign magic must be rejected"
+        );
+
         assert!(retro_unserialize(blob.as_ptr().cast(), blob.len()));
         assert_eq!(retro_serialize_size(), n);
 
@@ -798,6 +848,32 @@ mod tests {
         assert!(CORE.lock().unwrap().is_none());
         retro_deinit();
         let _ = std::fs::remove_file(disc_path);
+    }
+
+    #[test]
+    fn save_state_envelope_rejects_other_versions() {
+        let mut buffer = [0_u8; SAVE_STATE_HEADER_LEN + 3];
+        buffer[SAVE_STATE_HEADER_LEN..].copy_from_slice(&[1, 2, 3]);
+        write_save_state_header(&mut buffer);
+        assert_eq!(
+            read_save_state_payload(&buffer),
+            Some(&[1_u8, 2, 3][..]),
+            "a freshly written envelope must be accepted"
+        );
+
+        buffer[SAVE_STATE_MAGIC.len()] = 0xFF;
+        assert_eq!(
+            read_save_state_payload(&buffer),
+            None,
+            "a state from another format version must be rejected"
+        );
+
+        let truncated = [0_u8; SAVE_STATE_HEADER_LEN - 1];
+        assert_eq!(
+            read_save_state_payload(&truncated),
+            None,
+            "a buffer shorter than the envelope must be rejected"
+        );
     }
 
     #[test]
