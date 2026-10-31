@@ -115,7 +115,7 @@ pub extern "C" fn retro_get_system_info(info: *mut RetroSystemInfo) {
             return;
         };
         info.library_name = c"PlaydiaEmu".as_ptr();
-        info.library_version = c"0.1.0".as_ptr();
+        info.library_version = concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char;
         // Every format `DiscImage::from_path` understands: CUE+BIN, ZIP, and
         // raw or cooked single-file images.
         info.valid_extensions = c"cue|zip|iso|bin|img".as_ptr();
