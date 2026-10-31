@@ -11,7 +11,7 @@ __pycache__/
 .claude/
 
 # Local agent instructions
-CLAUDE.md
+AGENTS.md
 
 # OS
 .DS_Store
