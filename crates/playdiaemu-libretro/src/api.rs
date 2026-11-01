@@ -169,16 +169,10 @@ pub extern "C" fn retro_get_region() -> c_uint {
 pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
     guard(false, || {
         let Some(info) = (unsafe { info.as_ref() }) else {
-            return fail("Playdia: the frontend passed no game information.");
+            return fail(MISSING_CONTENT_PATH);
         };
-        // `need_fullpath` is true: a CUE sheet or ZIP reaches its data through
-        // sibling files, so an in-memory copy cannot be loaded. Reject it instead
-        // of silently pretending to support it.
         if info.path.is_null() {
-            return fail(
-                "Playdia: in-memory content is not supported; \
-             pass a .cue, .iso, .bin, .img or .zip file path.",
-            );
+            return fail(MISSING_CONTENT_PATH);
         }
         let path = match unsafe { CStr::from_ptr(info.path) }.to_str() {
             Ok(path) => std::path::PathBuf::from(path),
@@ -216,6 +210,9 @@ pub extern "C" fn retro_load_game(info: *const RetroGameInfo) -> bool {
         true
     })
 }
+
+const MISSING_CONTENT_PATH: &str =
+    "The frontend passed no content path; this core loads content from a file path only.";
 
 /// Report a load failure to both the log and the frontend's on-screen message.
 ///
@@ -765,7 +762,7 @@ mod tests {
         MESSAGE_SEEN.store(false, Ordering::SeqCst);
         assert!(
             !retro_load_game(&in_memory),
-            "in-memory content must be rejected when need_fullpath is set"
+            "content without a file path must be rejected"
         );
         assert!(
             MESSAGE_SEEN.load(Ordering::SeqCst),
