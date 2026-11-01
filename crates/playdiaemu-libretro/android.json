@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "core": "playdiaemu",
+  "so_name": "libplaydiaemu.so",
+  "system": "playdia",
+  "display_name": {
+    "en": "Playdia",
+    "zh": "万代 Playdia"
+  },
+  "short_name": "Playdia",
+  "manufacturer": "Bandai",
+  "supported_extensions": ["cue", "bin", "iso", "img", "zip"],
+  "save_state_format": 1,
+  "firmware": [],
+  "input": {
+    "preset": "dpad-ab-select"
+  },
+  "video": {
+    "orientation": "landscape",
+    "pixel_format": "xrgb8888"
+  },
+  "notes": {
+    "en": "Loads a .cue with its .bin tracks, a single .iso/.bin/.img image, or a Redump-style .zip containing the CUE/BIN set. No BIOS is required.",
+    "zh": "支持 .cue 及其 .bin 轨道、单文件 .iso/.bin/.img，或包含 CUE/BIN 的 Redump 风格 .zip；无需 BIOS。"
+  }
+}

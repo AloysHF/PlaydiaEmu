@@ -32,6 +32,9 @@ zip = { version = "9", default-features = false, features = ["deflate"] }
 opt-level = 3
 lto = true
 strip = true
+# The libretro core catches panics at the C ABI boundary, which needs unwinding
+# semantics. Only the wasm-release profile below opts into abort.
+panic = "unwind"
 
 # Binaryen's Asyncify pass rejects the wasm exception-handling section that the
 # prebuilt std ships with, so the Emscripten build compiles std from source
