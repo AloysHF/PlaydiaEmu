@@ -36,7 +36,7 @@
     Skip the cargo release rebuild and use the existing binary.
 
 .EXAMPLE
-    .\scripts\batch-screenshots.ps1 -RedumpDir "F:\Emulator\PlaydiaEmu\bandai-playdia-quick-redump"
+    .\scripts\batch-screenshots.ps1 -RedumpDir "tmp\playdia_game"
 
 .EXAMPLE
     .\scripts\batch-screenshots.ps1 -GameDir "tmp\playdia_game" -Frames 180
