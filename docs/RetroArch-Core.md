@@ -53,6 +53,14 @@ core metadata.
 > No BIOS is required. ZIP paths are passed to the core so the frontend does
 > not extract archives.
 
+## Mobile Platforms
+
+The same libretro core architecture is available on mobile platforms, with
+platform-specific installation requirements:
+
+- [Android Libretro Core](Android-Libretro-Core.md)
+- [iOS Libretro Core](iOS-Libretro-Core.md)
+
 ## Supported Features
 
 - HLE disc player (`DiscPlayer`) aligned with the standalone emulator
@@ -106,8 +114,8 @@ timeout destination, or slot 1 (Start/default) when no timeout is set.
 
 - Cheats are stubbed (`retro_cheat_*` no-ops)
 - No memory maps (HLE player has no fixed guest address space)
-- Android / iOS / webOS cores are built as CI artifacts; install guides for
-  those frontends are not documented yet
+- Android / iOS / webOS cores are built as CI artifacts; no webOS install
+  guide is documented yet
 
 ## Building notes
 
