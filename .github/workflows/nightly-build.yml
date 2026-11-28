@@ -364,6 +364,70 @@ jobs:
           path: playdia-emu-webos-libretro.tar.gz
           retention-days: 7
 
+  build-armhf:
+    name: Build (Linux armhf)
+    runs-on: ubuntu-latest
+    env:
+      RUST_TARGET: armv7-unknown-linux-gnueabihf
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.RUST_TARGET }}
+
+      - name: Install ARM cross toolchain
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf
+
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: nightly-armhf
+
+      - name: Build libretro core
+        env:
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER: arm-linux-gnueabihf-gcc
+          CC_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-gcc
+          AR_armv7_unknown_linux_gnueabihf: arm-linux-gnueabihf-ar
+        run: cargo build -p playdiaemu-libretro --release --target ${{ env.RUST_TARGET }}
+
+      - name: Verify ELF binary
+        shell: bash
+        run: |
+          arm-linux-gnueabihf-readelf -h target/${{ env.RUST_TARGET }}/release/libplaydiaemu.so
+          arm-linux-gnueabihf-readelf -d target/${{ env.RUST_TARGET }}/release/libplaydiaemu.so
+          # Hard-float ABI marker; absent from soft-float (gnueabi) builds.
+          arm-linux-gnueabihf-readelf -A target/${{ env.RUST_TARGET }}/release/libplaydiaemu.so | grep -i Tag_ABI_VFP_args
+
+      - name: Stage libretro core
+        shell: bash
+        run: |
+          out="libretro/playdia-emu-linux-armhf"
+          mkdir -p "$out"
+          cp target/${{ env.RUST_TARGET }}/release/libplaydiaemu.so "$out/playdiaemu_libretro.so"
+          cp crates/playdiaemu-libretro/playdiaemu_libretro.info "$out/"
+          ls -laR "$out"
+
+      - name: Package libretro
+        shell: bash
+        run: |
+          cd libretro
+          tar czf ../playdia-emu-linux-armhf-libretro.tar.gz playdia-emu-linux-armhf
+          cd ..
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: playdia-emu-linux-armhf
+          path: playdia-emu-linux-armhf-libretro.tar.gz
+          retention-days: 7
+
   build-emulatorjs:
     name: Build EmulatorJS core
     runs-on: ubuntu-latest
@@ -416,7 +480,7 @@ jobs:
 
   release:
     name: Publish Nightly Release
-    needs: [build, build-android, build-ios, build-webos, build-emulatorjs]
+    needs: [build, build-android, build-ios, build-webos, build-armhf, build-emulatorjs]
     runs-on: ubuntu-latest
     steps:
       - name: Compute version metadata
@@ -460,7 +524,7 @@ jobs:
 
           - Built: $DATETIME
           - Commit: [\`$SHORT_SHA\`](https://github.com/$REPO/commit/${{ github.sha }})
-          - Platforms: Windows x86_64/i686, macOS x86_64/aarch64, Linux x86_64/aarch64/i686 (the i686 builds are libretro cores only), Android (arm64-v8a/armeabi-v7a/x86/x86_64), iOS (arm64/x86_64/simulator), webOS (armv7)
+          - Platforms: Windows x86_64/i686, macOS x86_64/aarch64, Linux x86_64/aarch64/i686 (the i686 builds are libretro cores only) plus a Linux armhf libretro core, Android (arm64-v8a/armeabi-v7a/x86/x86_64), iOS (arm64/x86_64/simulator), webOS (armv7)
           - Includes the standalone emulator (\`playdia-emu\`), the libretro core (\`*-libretro.*\`) for RetroArch, and the EmulatorJS browser core (\`playdia-emu-emulatorjs.zip\`)
 
           ⚠️ Unsigned build: Windows SmartScreen / macOS Gatekeeper may block on first launch.
